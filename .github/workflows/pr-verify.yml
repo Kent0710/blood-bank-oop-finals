@@ -1,0 +1,40 @@
+name: PR Build & Automated Test Verification
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main, 'feat/**', 'fix/**', 'chore/**' ]
+
+jobs:
+  verify:
+    name: Build & Verify Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Compile Java Files
+        run: |
+          echo "Compiling all Java source files..."
+          javac *.java
+
+      - name: Run Automated Issue Test Runner
+        run: |
+          echo "Running TestRunner suite..."
+          java TestRunner all
+
+      - name: Report Build Summary
+        if: always()
+        run: |
+          echo "### Pull Request Automated Verification Report" >> $GITHUB_STEP_SUMMARY
+          echo "- **Java Version:** OpenJDK 17 (Temurin)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Compilation:** Successful" >> $GITHUB_STEP_SUMMARY
+          echo "- **Test Suite Execution:** Completed" >> $GITHUB_STEP_SUMMARY

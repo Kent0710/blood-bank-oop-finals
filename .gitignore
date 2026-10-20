@@ -7,3 +7,14 @@
 *.iml
 .vscode/
 bin/
+
+# Antigravity & Gemini Project Configurations and Rules
+.gemini/
+.agents/
+.agent/
+_agents/
+_agent/
+.agy/
+GEMINI.md
+AGENTS.md
+*.log
