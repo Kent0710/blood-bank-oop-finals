@@ -1,6 +1,8 @@
 import java.util.NoSuchElementException;
 import java.util.Scanner;
 
+import Role.User;
+
 /**
  * Application Entry Point for Blood Bank Management System.
  * Coordinates system startup and main menu navigation loop.
@@ -53,4 +55,26 @@ public class Main {
 
         scanner.close();
     }
+
+    //Print User Profile Badge
+    private static void printUserProfile(User user) {
+        String border = "+" + "-".repeat(15) + "+" + "-".repeat(67) + "+";
+
+        System.out.println(border);
+        System.out.printf("| %-80s |%n", "USER PROFILE BADGE");
+        System.out.println(border);
+
+        printRow("Account ID", user.getId());
+        printRow("Full Name", user.getFullName());
+        printRow("Role", user.getRole().toString());
+        printRow("Affiliation", user.getAffiliation());
+        printRow("Account Status", user.getAccountStatus().toString());
+
+        System.out.println(border);
+    }
+
+    private static void printRow(String label, String value) {
+        System.out.printf("| %-13s | %-65s |%n", label, value);
+    }
+
 }
