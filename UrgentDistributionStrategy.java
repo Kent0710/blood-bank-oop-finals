@@ -1,5 +1,5 @@
 /**
- * Strategy implementation for high-priority, emergency blood distributions.
+ * Concrete Distribution Strategy for emergency and critical requisitions.
  * Routes blood requests via immediate urgent emergency courier, bypassing
  * scheduled transport batching to ensure rapid point-to-point hospital delivery.
  */
@@ -15,13 +15,13 @@ public class UrgentDistributionStrategy implements DistributionStrategy {
         }
 
         System.out.println("================================================================================");
-        System.out.println("            *** CRITICAL EMERGENCY ROUTING: URGENT COURIER ***                 ");
+        System.out.println(">>> DISTRIBUTION STRATEGY ENGINE EXECUTION");
         System.out.println("================================================================================");
-        System.out.println("  Mode             : " + DISTRIBUTION_MODE);
-        System.out.println("  Routing Type     : Expedited Direct Point-to-Point Emergency Transit");
-        System.out.println("  Priority Level   : STAT / CRITICAL EMERGENCY");
-        System.out.println("  Dispatch Status  : Dispatched immediately with dedicated emergency courier");
-        System.out.println("  Consignment Details: " + request);
+        System.out.println("Active Strategy : " + DISTRIBUTION_MODE);
+        System.out.println("Routing Type    : Expedited Direct Point-to-Point Emergency Transit");
+        System.out.println("Priority Level  : STAT / CRITICAL EMERGENCY");
+        System.out.println("Dispatch Status : Dispatched immediately via dedicated emergency courier");
+        System.out.println("Target Request  : " + request);
         System.out.println("================================================================================");
     }
 

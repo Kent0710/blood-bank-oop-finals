@@ -1,7 +1,7 @@
 /**
- * Strategy implementation for routine, non-critical blood distributions.
+ * Concrete Distribution Strategy for routine, non-critical blood distributions.
  * Routes blood requests via scheduled regular transport batches using standard
- * logistics delivery windows.
+ * logistics delivery windows (e.g., standard 48-hour batches).
  */
 public class ScheduledDistributionStrategy implements DistributionStrategy {
 
@@ -15,13 +15,13 @@ public class ScheduledDistributionStrategy implements DistributionStrategy {
         }
 
         System.out.println("================================================================================");
-        System.out.println("                 ROUTINE LOGISTICS ROUTING: SCHEDULED TRANSPORT                 ");
+        System.out.println(">>> DISTRIBUTION STRATEGY ENGINE EXECUTION");
         System.out.println("================================================================================");
-        System.out.println("  Mode             : " + DISTRIBUTION_MODE);
-        System.out.println("  Routing Type     : Standard Batch Transit / Refrigerated Fleet Route");
-        System.out.println("  Priority Level   : Standard (Non-Emergency)");
-        System.out.println("  Dispatch Status  : Queued into upcoming scheduled distribution batch");
-        System.out.println("  Consignment Details: " + request);
+        System.out.println("Active Strategy : " + DISTRIBUTION_MODE);
+        System.out.println("Routing Type    : Standard Batch Transit / Refrigerated Fleet Route");
+        System.out.println("Priority Level  : Normal (Routine 48-Hour Batch)");
+        System.out.println("Dispatch Status : Queued into scheduled distribution route");
+        System.out.println("Target Request  : " + request);
         System.out.println("================================================================================");
     }
 
