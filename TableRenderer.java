@@ -53,11 +53,11 @@ public class TableRenderer {
 
         int[] widths = calculateColumnWidths();
 
-        printBorder(widths);
+        printOuterBorder(widths);
 
-        if(title != null && !title.isEmpty()) {
+        if (title != null && !title.isEmpty()) {
             printTitle(title, widths);
-            printBorder(widths);
+            printOuterBorder(widths);
         }
 
         printRow(headers, widths);
@@ -89,6 +89,16 @@ public class TableRenderer {
 
     }
 
+    private void printOuterBorder(int[] widths) {
+        int borderWidth = 1;
+
+        for (int width : widths) {
+            borderWidth += width + 3;
+    }
+
+        System.out.println("+" + "-".repeat(borderWidth - 2) + "+");
+    }
+
     private int[] calculateColumnWidths() {
         int[] widths = new int[headers.size()];
 
@@ -102,8 +112,22 @@ public class TableRenderer {
             }
         }
 
+        if (title != null && !title.isEmpty()) {
+            int tableTextWidth = 0;
+
+            for (int width : widths) {
+                tableTextWidth += width + 3;
+            }
+            tableTextWidth--; 
+
+            if (title.length() > tableTextWidth) {
+                widths[widths.length - 1] += title.length() - tableTextWidth;
+            }
+        }
+
         return widths;
     }
+
 
     private void printBorder(int[] widths) {
         StringBuilder line = new StringBuilder("+");
