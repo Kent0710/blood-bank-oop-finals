@@ -1,6 +1,5 @@
 import java.util.NoSuchElementException;
 import java.util.Scanner;
-
 import Role.User;
 
 /**
@@ -67,7 +66,7 @@ public class Main {
         printRow("Account ID", user.getId());
         printRow("Full Name", user.getFullName());
         printRow("Role", user.getRole().toString());
-        printRow("Affiliation", user.getAffiliation());
+        printRow("Affiliation", user.getHospitalAffiliation());
         printRow("Account Status", user.getAccountStatus().toString());
 
         System.out.println(border);

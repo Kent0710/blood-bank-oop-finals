@@ -27,4 +27,13 @@ public boolean checkPassword(String password) {
     return this.password  != null && this.password.equals(password);
 }
 public abstract String getRoleDescription();
+
+public enum AccountStatus {ACTIVE, PENDING, SUSPENDED}
+private AccountStatus accountStatus = AccountStatus.ACTIVE;
+public AccountStatus getAccountStatus() {return accountStatus;}
+
 }
+
+
+
+
