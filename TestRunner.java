@@ -470,7 +470,59 @@ public class TestRunner {
             failTest("Issue #13 error: " + e.getMessage());
         }
     }
-    private static void testIssue14() { verifyClassPresence(14, "SuperAdminController"); }
+    private static void testIssue14() {
+        if (!classExists("SuperAdminController")) {
+            skipIssue(14, "SuperAdminController not found yet.");
+            return;
+        }
+
+        try {
+            Class<?> saClass = Class.forName("SuperAdminController");
+            assertCondition(hasMethod(saClass, "manageUserAccounts"), "SuperAdminController contains manageUserAccounts method");
+            assertCondition(hasMethod(saClass, "toggleUserArchiveStatus"), "SuperAdminController contains toggleUserArchiveStatus method");
+            assertCondition(hasMethod(saClass, "deleteUserPermanently"), "SuperAdminController contains deleteUserPermanently method");
+
+            // Setup a test employee user
+            User testUser = SuperAdminController.registerEmployee(Roles.HOSPITAL_ADMIN, "Dr. Ledger Test", "Metro Hospital", "tempPass123");
+            String testId = testUser.getId();
+            assertCondition(testUser != null && testId != null, "Successfully provisioned test user for ledger management: " + testId);
+
+            // Test Toggle Archive (Disable user)
+            boolean toggle1 = SuperAdminController.toggleUserArchive(testId);
+            assertCondition(toggle1 && testUser.isArchived() && !testUser.isActive(),
+                    "toggleUserArchive successfully marks user as ARCHIVED / inactive");
+
+            // Verify login rejection for archived user
+            boolean loginRejected = false;
+            try {
+                AuthController.login(testId, "tempPass123");
+            } catch (AuthenticationException e) {
+                loginRejected = true;
+            }
+            assertCondition(loginRejected, "Archived account is rejected from authenticating into system");
+
+            // Test Toggle Archive (Re-enable user)
+            boolean toggle2 = SuperAdminController.toggleUserArchive(testId);
+            assertCondition(toggle2 && !testUser.isArchived() && testUser.isActive(),
+                    "toggleUserArchive successfully re-activates account back to ACTIVE status");
+
+            // Test Primary Super Admin Protection (BB-1001 cannot be archived or deleted)
+            boolean archiveAdmin = SuperAdminController.toggleUserArchive("BB-1001");
+            boolean deleteAdmin = SuperAdminController.deleteUser("BB-1001");
+            assertCondition(!archiveAdmin, "Primary Super Admin (BB-1001) is protected from being archived");
+            assertCondition(!deleteAdmin, "Primary Super Admin (BB-1001) is protected from being deleted");
+
+            // Test Permanent Delete
+            boolean deleted = SuperAdminController.deleteUser(testId);
+            assertCondition(deleted, "deleteUser successfully deleted account: " + testId);
+            assertCondition(UserService.getInstance().getUserById(testId) == null,
+                    "Deleted user is completely removed from UserService ledger");
+
+            passTest("Issue #14: User Account Ledger, archive toggle, permanent deletion, and admin protection verified.");
+        } catch (Exception e) {
+            failTest("Issue #14 error: " + e.getMessage());
+        }
+    }
     private static void testIssue15() { verifyClassPresence(15, "CentralInventory"); }
     private static void testIssue16() { verifyClassPresence(16, "HospitalAdminController"); }
     private static void testIssue17() { verifyClassPresence(17, "Main", "InputValidator"); }
