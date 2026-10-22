@@ -784,9 +784,8 @@ public class SuperAdminController {
         return accountId != null && accountId.trim().equalsIgnoreCase("BB-1001");
     }
 
-    /** Option [11] Placeholder: Logistics Console (Issue #10) */
+    /** Option [11]: Open the shared Logistics & Distribution dashboard. */
     protected static void logisticsConsole(Scanner sc) {
-        System.out.println("\n>>> LOGISTICS & DISTRIBUTION CONSOLE");
-        System.out.println("  [Notice] Logistics & Distribution Console is scheduled for Milestone 3 (Issue #10).");
+        LogisticsController.showAdminDashboard(sc);
     }
 }
