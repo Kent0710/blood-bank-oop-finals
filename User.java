@@ -16,13 +16,19 @@ public abstract class User {
     }
 
     public String getId() { return id; }
+    public String getAccountId() { return id; }
     public String getFullName() { return fullName; }
+    public String getName() { return fullName; }
     public Roles getRole() { return role; }
     public String getHospitalAffiliation() { return hospitalAffiliation; }
     public boolean isArchived() { return archived; }
+    public boolean isActive() { return !archived; }
     public void setArchived(boolean archived) { this.archived = archived; }
     public boolean checkPassword(String password) {
         return this.password != null && this.password.equals(password);
+    }
+    public boolean authenticate(String password) {
+        return checkPassword(password);
     }
     public abstract String getRoleDescription();
 
