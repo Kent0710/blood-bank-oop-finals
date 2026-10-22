@@ -1,3 +1,4 @@
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Scanner;
 
@@ -91,7 +92,7 @@ public class SuperAdminController {
                         performAuditAndPurge();
                         break;
                     case 8:
-                        configureLowStockThreshold(sc);
+                        setLowStockThreshold(sc);
                         break;
                     case 9:
                         switchAllocationStrategy(sc);
@@ -217,72 +218,91 @@ public class SuperAdminController {
         System.out.println("  [Notice] Organization Blood Drive Intake Pipeline is coordinated via PipelineHelper (Issue #5).");
     }
 
-    /** Option [5] Placeholder / Live Hook: Central Inventory Active Stock (Issue #15) */
-    protected static void viewInventoryLedger() {
-        System.out.println("\n>>> CENTRAL INVENTORY ACTIVE STOCK LEDGER");
-        try {
-            CentralInventory inv = CentralInventory.getInstance();
-            System.out.println("Total Active Units: " + inv.getActiveUnits().size());
-            System.out.println("Stock Breakdown: " + inv.getStockCounts());
-            System.out.println("  [Notice] Full Tabular LEDGER & Alert Banners are scheduled for Milestone 4 (Issue #15).");
-        } catch (Exception e) {
-            System.out.println("  [Notice] Central Inventory stock view scheduled for Issue #15.");
+    /** Option [5]: View Central Inventory Active Stock with Low-Stock Red Alerts (Issue #15) */
+    public static void viewInventoryLedger() {
+        CentralInventory inv = CentralInventory.getInstance();
+        inv.printLowStockAlerts();
+
+        TableRenderer table = new TableRenderer()
+                .withTitle("CENTRAL INVENTORY STOCK LEDGER")
+                .addHeaders("#", "Unit ID", "Blood Type", "Component", "Expiry Date", "Status");
+
+        List<BloodUnit> units = inv.getActiveUnits();
+        int index = 1;
+        for (BloodUnit u : units) {
+            table.addRow(
+                    String.valueOf(index++),
+                    u.getUnitId(),
+                    u.getBloodType() != null ? u.getBloodType().getCode() : "N/A",
+                    u.getComponent() != null ? u.getComponent().name() : "N/A",
+                    u.getExpirationDate() != null ? u.getExpirationDate().toString() : "N/A",
+                    u.getStatus() != null ? u.getStatus().name() : "N/A"
+            );
+        }
+        table.render();
+    }
+
+    /** Option [6]: View Quarantine Stock (Compromised & Expired Units) (Issue #15) */
+    public static void viewQuarantineLedger() {
+        CentralInventory inv = CentralInventory.getInstance();
+
+        TableRenderer table = new TableRenderer()
+                .withTitle("QUARANTINE & COMPROMISED STOCK LEDGER")
+                .addHeaders("#", "Unit ID", "Blood Type", "Component", "Expiry Date", "Status");
+
+        List<BloodUnit> units = inv.getQuarantineUnits();
+        int index = 1;
+        for (BloodUnit u : units) {
+            table.addRow(
+                    String.valueOf(index++),
+                    u.getUnitId(),
+                    u.getBloodType() != null ? u.getBloodType().getCode() : "N/A",
+                    u.getComponent() != null ? u.getComponent().name() : "N/A",
+                    u.getExpirationDate() != null ? u.getExpirationDate().toString() : "N/A",
+                    u.getStatus() != null ? u.getStatus().name() : "N/A"
+            );
+        }
+        table.render();
+    }
+
+    /** Option [7]: Audit & Purge Expired Blood Units (Issue #15) */
+    public static void performAuditAndPurge() {
+        CentralInventory inv = CentralInventory.getInstance();
+        int purged = inv.auditAndPurgeExpiredStock();
+        if (purged == 0) {
+            System.out.println("  [Audit Complete] No expired blood units detected. All active inventory remains clinical-grade.");
+        } else {
+            System.out.println("  [Audit Complete] Successfully purged " + purged + " expired unit(s) to quarantine stock.");
         }
     }
 
-    /** Option [6] Placeholder / Live Hook: Quarantine Stock (Issue #15) */
-    protected static void viewQuarantineLedger() {
-        System.out.println("\n>>> QUARANTINE STOCK LEDGER");
-        try {
-            CentralInventory inv = CentralInventory.getInstance();
-            System.out.println("Total Quarantined Units: " + inv.getQuarantineUnits().size());
-            System.out.println("  [Notice] Full Tabular Quarantine LEDGER is scheduled for Milestone 4 (Issue #15).");
-        } catch (Exception e) {
-            System.out.println("  [Notice] Quarantine stock view scheduled for Issue #15.");
-        }
+    /** Option [8]: Configure Low-Stock Alert Threshold (Issue #15) */
+    public static void setLowStockThreshold(Scanner sc) {
+        System.out.println("\n>>> CONFIGURE LOW-STOCK ALERT THRESHOLD");
+        CentralInventory inv = CentralInventory.getInstance();
+        System.out.println("Current Low-Stock Threshold: " + inv.getLowStockThreshold() + " units");
+        int newThreshold = InputValidator.readInt(sc, "Enter new safety threshold (1-50): ", 1, 50);
+        inv.setLowStockThreshold(newThreshold);
+        System.out.println("[SUCCESS] Low-stock safety threshold updated to " + newThreshold + " units.");
     }
 
-    /** Option [7] Placeholder / Live Hook: Audit & Purge Expired Blood (Issue #15) */
-    protected static void performAuditAndPurge() {
-        try {
-            CentralInventory inv = CentralInventory.getInstance();
-            inv.auditAndPurgeExpiredStock();
-        } catch (Exception e) {
-            System.out.println("\n  [Notice] Audit & Purge engine scheduled for Milestone 4 (Issue #15).");
-        }
+    public static void configureLowStockThreshold(Scanner sc) {
+        setLowStockThreshold(sc);
     }
 
-    /** Option [8] Placeholder: Low-Stock Threshold Customization (Issue #15) */
-    protected static void configureLowStockThreshold(Scanner sc) {
-        System.out.println("\n>>> CONFIGURE LOW-STOCK THRESHOLD");
-        try {
-            CentralInventory inv = CentralInventory.getInstance();
-            System.out.println("Current Low-Stock Threshold: " + inv.getLowStockThreshold() + " units");
-            int newThreshold = InputValidator.readInt(sc, "Enter new safety threshold (1-50): ", 1, 50);
-            inv.setLowStockThreshold(newThreshold);
-            System.out.println("[SUCCESS] Low-stock safety threshold updated to " + newThreshold + " units.");
-        } catch (Exception e) {
-            System.out.println("  [Notice] Threshold configurator scheduled for Milestone 4 (Issue #15).");
-        }
-    }
-
-    /** Option [9] Placeholder: Allocation Strategy Switcher (Issue #15) */
-    protected static void switchAllocationStrategy(Scanner sc) {
+    /** Option [9]: Switch Allocation Strategy (FIFO vs FEFO) (Issue #15) */
+    public static void switchAllocationStrategy(Scanner sc) {
         System.out.println("\n>>> SWITCH ALLOCATION STRATEGY");
-        try {
-            CentralInventory inv = CentralInventory.getInstance();
-            System.out.println("Current Active Strategy: " + inv.getAllocationStrategy().getStrategyName());
-            System.out.println("Select Strategy: [1] FIFO (First In, First Out)  [2] FEFO (First Expired, First Out)");
-            int stratChoice = InputValidator.readInt(sc, "Enter choice (1-2): ", 1, 2);
-            if (stratChoice == 1) {
-                inv.setAllocationStrategy(new FifoAllocationStrategy());
-            } else {
-                inv.setAllocationStrategy(new FefoAllocationStrategy());
-            }
-            System.out.println("[SUCCESS] Active allocation strategy updated to: " + inv.getAllocationStrategy().getStrategyName());
-        } catch (Exception e) {
-            System.out.println("  [Notice] Strategy switcher scheduled for Milestone 4 (Issue #15).");
+        CentralInventory inv = CentralInventory.getInstance();
+        System.out.println("Current Active Strategy: " + inv.getAllocationStrategy().getStrategyName());
+        System.out.println("Select New Strategy: [1] FIFO (First In, First Out)  [2] FEFO (First Expired, First Out)");
+        int choice = InputValidator.readInt(sc, "Enter choice (1-2): ", 1, 2);
+        if (choice == 1) {
+            inv.setAllocationStrategy(new FifoAllocationStrategy());
+        } else {
+            inv.setAllocationStrategy(new FefoAllocationStrategy());
         }
+        System.out.println("[SUCCESS] Active allocation strategy updated to: " + inv.getAllocationStrategy().getStrategyName());
     }
 
     /** Option [10] Placeholder: User Account Management (Issue #14) */
