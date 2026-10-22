@@ -1,5 +1,3 @@
-package Role;
-
 public class Patient extends User {
     private BloodType patientBloodType;
 
@@ -8,15 +6,24 @@ public class Patient extends User {
         this.patientBloodType = patientBloodType;
     }
 
+    public BloodType getPatientBloodType() {
+        return patientBloodType;
+    }
+
+    public BloodType getBloodType() {
+        return patientBloodType;
+    }
+
+    public void setBloodType(BloodType patientBloodType) {
+        this.patientBloodType = patientBloodType;
+    }
+
+    public String getPatientId() {
+        return getId();
+    }
+
     @Override
     public String getRoleDescription() {
         return "Patient";
-    }
-
-    public enum BloodType {
-        A_POSITIVE, A_NEGATIVE,
-        B_POSITIVE, B_NEGATIVE,
-        AB_POSITIVE, AB_NEGATIVE,
-        O_POSITIVE, O_NEGATIVE
     }
 }
