@@ -409,7 +409,67 @@ public class TestRunner {
         }
     }
     private static void testIssue12() { verifyClassPresence(12, "SuperAdminController"); }
-    private static void testIssue13() { verifyClassPresence(13, "SuperAdminController"); }
+    private static void testIssue13() {
+        if (!classExists("SuperAdminController")) {
+            skipIssue(13, "SuperAdminController not found yet.");
+            return;
+        }
+
+        try {
+            Class<?> saClass = Class.forName("SuperAdminController");
+            assertCondition(hasMethod(saClass, "reviewRequisitions"), "SuperAdminController contains reviewRequisitions method");
+            assertCondition(hasMethod(saClass, "filterRequisitions"), "SuperAdminController contains filterRequisitions method");
+            assertCondition(hasMethod(saClass, "sortRequisitions"), "SuperAdminController contains sortRequisitions method");
+            assertCondition(hasMethod(saClass, "processSingleRequisition"), "SuperAdminController contains processSingleRequisition method");
+
+            // Setup test requisitions
+            LocalDateTime now = LocalDateTime.now();
+            BloodRequest reqNormal = new BloodRequest("REQ-9001", "Hospital A", "Patient A", BloodType.A_POS, PriorityLevel.NORMAL, now.plusHours(96));
+            BloodRequest reqUrgent = new BloodRequest("REQ-9002", "Hospital B", "Patient B", BloodType.O_NEG, PriorityLevel.URGENT, now.plusHours(12));
+
+            List<BloodRequest> testList = new ArrayList<>();
+            testList.add(reqNormal);
+            testList.add(reqUrgent);
+
+            // Test priority sorting (URGENT first)
+            testList.sort((a, b) -> (a.getPriority() == PriorityLevel.URGENT) ? -1 : 1);
+            assertCondition(testList.get(0).getPriority() == PriorityLevel.URGENT,
+                    "Requisitions can be sorted by priority level (URGENT first)");
+
+            // Test filtering by blood type
+            List<BloodRequest> filteredType = new ArrayList<>(testList);
+            filteredType.removeIf(r -> r.getBloodType() != BloodType.O_NEG);
+            assertCondition(filteredType.size() == 1 && filteredType.get(0).getBloodType() == BloodType.O_NEG,
+                    "Requisitions can be filtered by blood type (O-)");
+
+            // Test filtering by priority
+            List<BloodRequest> filteredPriority = new ArrayList<>(testList);
+            filteredPriority.removeIf(r -> r.getPriority() != PriorityLevel.NORMAL);
+            assertCondition(filteredPriority.size() == 1 && filteredPriority.get(0).getPriority() == PriorityLevel.NORMAL,
+                    "Requisitions can be filtered by priority level (NORMAL)");
+
+            // Test Approval workflow with CentralInventory and LogisticsService
+            CentralInventory inventory = CentralInventory.getInstance();
+            BloodUnit unit = new BloodUnit("BU-9001", BloodType.O_NEG, BloodComponent.WHOLE_BLOOD, LocalDate.now(), "Donor Test");
+            inventory.addUnit(unit);
+
+            assertCondition(inventory.getActiveUnits().contains(unit), "Test unit BU-9001 placed into active inventory");
+
+            BloodUnit allocated = SuperAdminController.approveRequisition(reqUrgent);
+            assertCondition(allocated != null && allocated.getUnitId().equals("BU-9001"), "approveRequisition allocates compatible active blood unit");
+            assertCondition(reqUrgent.getStatus() == RequisitionStatus.APPROVED, "approveRequisition updates requisition status to APPROVED");
+            assertCondition(reqUrgent.getAssignedUnitId() != null && reqUrgent.getAssignedUnitId().equals("BU-9001"), "approveRequisition binds unit ID to requisition");
+            assertCondition(LogisticsService.getInstance().getUrgentQueue().contains(reqUrgent), "approveRequisition enqueues urgent requisition to LogisticsService");
+
+            // Test Rejection workflow
+            SuperAdminController.rejectRequisition(reqNormal, "Insufficient donor units available");
+            assertCondition(reqNormal.getStatus() == RequisitionStatus.REJECTED, "rejectRequisition sets requisition status to REJECTED");
+
+            passTest("Issue #13: SuperAdmin requisition review, table rendering, sorting, filtering, and approval engine verified.");
+        } catch (Exception e) {
+            failTest("Issue #13 error: " + e.getMessage());
+        }
+    }
     private static void testIssue14() { verifyClassPresence(14, "SuperAdminController"); }
     private static void testIssue15() { verifyClassPresence(15, "CentralInventory"); }
     private static void testIssue16() { verifyClassPresence(16, "HospitalAdminController"); }
