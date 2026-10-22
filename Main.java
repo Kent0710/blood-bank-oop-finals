@@ -1,6 +1,5 @@
 import java.util.NoSuchElementException;
 import java.util.Scanner;
-import Role.User;
 
 /**
  * Application Entry Point for Blood Bank Management System.
