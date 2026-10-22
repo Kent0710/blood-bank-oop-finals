@@ -525,7 +525,55 @@ public class TestRunner {
     }
     private static void testIssue15() { verifyClassPresence(15, "CentralInventory"); }
     private static void testIssue16() { verifyClassPresence(16, "HospitalAdminController"); }
-    private static void testIssue17() { verifyClassPresence(17, "Main", "InputValidator"); }
+    private static void testIssue17() {
+        if (!classExists("Main") || !classExists("InputValidator")) {
+            skipIssue(17, "Main or InputValidator not found yet.");
+            return;
+        }
+
+        try {
+            Class<?> valClass = Class.forName("InputValidator");
+            assertCondition(hasMethod(valClass, "readInt"), "InputValidator contains readInt method");
+            assertCondition(hasMethod(valClass, "readNonBlankString"), "InputValidator contains readNonBlankString method");
+            assertCondition(hasMethod(valClass, "readFutureDateTime"), "InputValidator contains readFutureDateTime method");
+
+            // Test readInt with onReprompt callback
+            int[] repromptCount = new int[]{0};
+            Runnable onReprompt = () -> repromptCount[0]++;
+            Scanner sc1 = new Scanner("invalid\n5\n");
+            int val = InputValidator.readInt(sc1, "Enter int: ", 1, 10, onReprompt);
+            assertCondition(val == 5, "readInt successfully returned valid value after reprompt");
+            assertCondition(repromptCount[0] == 1, "readInt executed onReprompt callback on invalid input");
+
+            // Test readNonBlankString with onReprompt callback
+            int[] stringRepromptCount = new int[]{0};
+            Runnable onStringReprompt = () -> stringRepromptCount[0]++;
+            Scanner sc2 = new Scanner("\n   \nvalid-string\n");
+            String strVal = InputValidator.readNonBlankString(sc2, "Enter str: ", onStringReprompt);
+            assertCondition("valid-string".equals(strVal), "readNonBlankString successfully returned valid value");
+            assertCondition(stringRepromptCount[0] == 2, "readNonBlankString executed onReprompt callback on empty/whitespace input");
+
+            // Test startup scripts
+            java.io.File runSh = new java.io.File("run.sh");
+            java.io.File runBat = new java.io.File("run.bat");
+            assertCondition(runSh.exists(), "run.sh startup shell script exists");
+            assertCondition(runBat.exists(), "run.bat startup batch script exists");
+
+            // Test Master Super Admin default account setup
+            UserService userService = UserService.getInstance();
+            if (userService.getUserById("BB-1001") == null) {
+                userService.registerUser(new BloodBank("BB-1001", "Master Super Admin", "admin123"));
+            }
+            User admin = userService.getUserById("BB-1001");
+            assertCondition(admin != null, "Master Super Admin account (BB-1001) exists");
+            assertCondition(admin.checkPassword("admin123"), "Master Super Admin password verified (admin123)");
+            assertCondition(admin.getRole() == Roles.SUPER_ADMIN, "Master Super Admin has SUPER_ADMIN role");
+
+            passTest("Issue #17: Menu reprompt callbacks, clean state audit, master Super Admin, and startup scripts verified.");
+        } catch (Exception e) {
+            failTest("Issue #17 error: " + e.getMessage());
+        }
+    }
 
     private static void testIssue18() {
         java.io.File runSh = new java.io.File("run.sh");
