@@ -580,11 +580,47 @@ public class TestRunner {
         java.io.File runBat = new java.io.File("run.bat");
         java.io.File readme = new java.io.File("README.md");
 
-        if (runSh.exists() || runBat.exists() || readme.exists()) {
-            assertCondition(readme.exists(), "README.md exists");
-            passTest("Issue #18: DevOps automation scripts and documentation verified.");
-        } else {
+        if (!runSh.exists() && !runBat.exists() && !readme.exists()) {
             skipIssue(18, "run.sh, run.bat, and README.md not found yet.");
+            return;
+        }
+
+        try {
+            assertCondition(readme.exists(), "README.md exists");
+            assertCondition(runSh.exists(), "run.sh automation script exists");
+            assertCondition(runBat.exists(), "run.bat Windows automation script exists");
+
+            // Verify README contents
+            if (readme.exists()) {
+                java.nio.file.Path readmePath = readme.toPath();
+                String content = new String(java.nio.file.Files.readAllBytes(readmePath));
+                assertCondition(content.contains("Object-Oriented Programming"), "README.md includes University Course Info");
+                assertCondition(content.contains("Nicole") && content.contains("Irish") && content.contains("Nigel") && content.contains("Kent"),
+                        "README.md lists all team members and domain ownership");
+                assertCondition(content.contains("Singleton") && content.contains("Strategy"), "README.md documents GoF Design Patterns");
+                assertCondition(content.contains("Super Admin") && content.contains("Hospital Admin") && content.contains("Logistics"),
+                        "README.md documents Core System Features by Role");
+                assertCondition(content.contains("run.sh") && content.contains("run.bat"), "README.md includes Quick-Start execution guides");
+            }
+
+            // Verify run.sh script
+            if (runSh.exists()) {
+                assertCondition(runSh.canExecute(), "run.sh is executable (chmod +x)");
+                String shContent = new String(java.nio.file.Files.readAllBytes(runSh.toPath()));
+                assertCondition(shContent.contains("javac") && shContent.contains("java Main"),
+                        "run.sh contains compilation (javac) and execution (java Main) commands");
+            }
+
+            // Verify run.bat script
+            if (runBat.exists()) {
+                String batContent = new String(java.nio.file.Files.readAllBytes(runBat.toPath()));
+                assertCondition(batContent.contains("javac") && batContent.contains("java Main"),
+                        "run.bat contains compilation (javac) and execution (java Main) commands");
+            }
+
+            passTest("Issue #18: DevOps automation scripts (run.sh / run.bat) and comprehensive README.md fully verified.");
+        } catch (Exception e) {
+            failTest("Issue #18 error: " + e.getMessage());
         }
     }
 
