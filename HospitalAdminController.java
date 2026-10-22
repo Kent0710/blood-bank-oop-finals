@@ -250,17 +250,15 @@ public class HospitalAdminController {
         Patient patient = new Patient(patientId, fullName, hospital, password, bloodType);
         userService.registerUser(patient);
 
-        System.out.println("\n+-----------------------------------------------------------------------------------+");
-        System.out.println("|                      BEDSIDE PATIENT ONBOARDING SUCCESSFUL                        |");
-        System.out.println("+----------------------+------------------------------------------------------------+");
-        System.out.printf("| %-20s | %-58s |\n", "Patient Account ID", patientId);
-        System.out.printf("| %-20s | %-58s |\n", "Patient Name", fullName);
-        System.out.printf("| %-20s | %-58s |\n", "Blood Type", (bloodType != null ? bloodType.getCode() : "N/A"));
-        System.out.printf("| %-20s | %-58s |\n", "Bound Hospital", hospital);
-        System.out.printf("| %-20s | %-58s |\n", "Account Status", patient.getAccountStatus());
-        System.out.println("+----------------------+------------------------------------------------------------+");
-        System.out.println("| >> Bedside account activated. Patient may now log in to the Patient Portal.       |");
-        System.out.println("+-----------------------------------------------------------------------------------+");
+        System.out.println("------------------------------------------------------------");
+        System.out.println(">>> BEDSIDE PATIENT ONBOARDING RECEIPT");
+        System.out.println("------------------------------------------------------------");
+        System.out.println("Assigned Patient ID : " + patientId);
+        System.out.println("Patient Full Name   : " + fullName);
+        System.out.println("ABO/Rh Blood Type   : " + (bloodType != null ? bloodType.getCode() : "N/A"));
+        System.out.println("Hospital Ward       : " + hospital);
+        System.out.println("Status              : ACTIVE - Ready for Requisition Matching");
+        System.out.println("------------------------------------------------------------");
     }
 
     /**
