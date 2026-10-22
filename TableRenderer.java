@@ -112,6 +112,10 @@ public class TableRenderer {
             }
         }
 
+        if (rows.isEmpty() && widths.length > 0) {
+            widths[0] = Math.max(widths[0], "(No Records Found)".length());
+        }
+
         if (title != null && !title.isEmpty()) {
             int tableTextWidth = 0;
 
@@ -145,7 +149,8 @@ public class TableRenderer {
         for (int column = 0; column < widths.length; column++) {
             String value = display(values.get(column));
             line.append(" ").append(value);
-            line.append(" ".repeat(widths[column] - value.length()));
+            int pad = Math.max(0, widths[column] - value.length());
+            line.append(" ".repeat(pad));
             line.append(" |");
         }
 
@@ -175,4 +180,3 @@ public class TableRenderer {
     }
 
 }
-
