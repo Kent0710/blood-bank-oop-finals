@@ -10,12 +10,20 @@ public class Main {
     public static void main(String[] args) {
         Scanner scanner = new Scanner(System.in);
 
-        System.out.println("=================================================================");
-        System.out.println("   CENTRAL BLOOD BANK MANAGEMENT & LOGISTICS SYSTEM (OOP/GoF)    ");
-        System.out.println("=================================================================");
+        // Ensure default master Super Admin account exists on clean startup
+        UserService userService = UserService.getInstance();
+        if (userService.getUserById("BB-1001") == null) {
+            userService.registerUser(new BloodBank("BB-1001", "Master Super Admin", "admin123"));
+        }
+
+        System.out.println("================================================================================");
+        System.out.println("       CENTRAL BLOOD BANK MANAGEMENT & LOGISTICS DISTRIBUTION SYSTEM        ");
+        System.out.println("================================================================================");
+        System.out.println("  [INFO] System initialized with clean storage state.");
+        System.out.println("  [INFO] Master Super Admin account active (BB-1001).");
 
         Runnable printMainMenu = () -> {
-            System.out.println("\n+----------------------- MAIN SYSTEM MENU -----------------------+");
+            System.out.println("+----------------------- MAIN SYSTEM MENU -----------------------+");
             System.out.println("| [1] Sign in (Account ID & Password)                            |");
             System.out.println("| [2] Create account (Public Registration)                       |");
             System.out.println("| [3] Exit                                                       |");
@@ -25,7 +33,9 @@ public class Main {
         boolean isRunning = true;
         while (isRunning) {
             try {
+                System.out.println();
                 printMainMenu.run();
+                System.out.println();
                 int choice = InputValidator.readInt(scanner, "Enter choice (1-3): ", 1, 3, printMainMenu);
 
                 switch (choice) {
