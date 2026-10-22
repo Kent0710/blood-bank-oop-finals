@@ -1,3 +1,7 @@
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Scanner;
 
@@ -199,10 +203,294 @@ public class SuperAdminController {
     // FEATURE PLACEHOLDERS & INTEGRATION HOOKS (Sprints 3 & 4)
     // =========================================================================
 
-    /** Option [2] Placeholder: Connected in Issue #13 */
-    protected static void reviewRequisitions(Scanner sc) {
-        System.out.println("\n>>> REVIEW & PROCESS HOSPITAL REQUISITIONS");
-        System.out.println("  [Notice] Full Requisition Review & Processing Engine is scheduled for Milestone 4 (Issue #13).");
+    /**
+     * Option [2]: Review & Process Incoming Hospital Blood Requests.
+     * Renders incoming requisitions in dynamic ASCII table format,
+     * supports multi-criteria sorting and filtering, and processes approval/rejection.
+     *
+     * @param sc Scanner console input
+     */
+    public static void reviewRequisitions(Scanner sc) {
+        if (sc == null) {
+            sc = new Scanner(System.in);
+        }
+
+        InspectionService inspectionService = InspectionService.getInstance();
+        List<BloodRequest> currentView = new ArrayList<>(inspectionService.getAllRequisitions());
+
+        boolean inReview = true;
+        while (inReview) {
+            System.out.println();
+            renderRequisitionTable(currentView);
+
+            System.out.println("\nRequisition Actions: [1] Process Request  [2] Sort Requests  [3] Filter Requests  [0] Back");
+            int action = InputValidator.readInt(sc, "Enter choice (0-3): ", 0, 3);
+
+            switch (action) {
+                case 1:
+                    if (currentView.isEmpty()) {
+                        System.out.println("  [Notice] No requisitions available in current view to process.");
+                        break;
+                    }
+                    int sel = InputValidator.readInt(sc, "Enter requisition # from table above (1-" + currentView.size() + ", 0 to cancel): ", 0, currentView.size());
+                    if (sel > 0) {
+                        BloodRequest req = currentView.get(sel - 1);
+                        processSingleRequisition(sc, req);
+                    }
+                    break;
+                case 2:
+                    sortRequisitions(sc, currentView);
+                    break;
+                case 3:
+                    filterRequisitions(sc, currentView);
+                    break;
+                case 0:
+                    inReview = false;
+                    break;
+            }
+        }
+    }
+
+    /**
+     * Renders requisitions into a dynamic ASCII table with column headers matching the UI specification.
+     */
+    private static void renderRequisitionTable(List<BloodRequest> reqs) {
+        TableRenderer table = new TableRenderer()
+                .withTitle("INCOMING HOSPITAL BLOOD REQUISITIONS")
+                .addHeaders("#", "Req ID", "Hospital", "Patient", "Type", "Priority", "S");
+
+        if (reqs != null) {
+            for (int i = 0; i < reqs.size(); i++) {
+                BloodRequest r = reqs.get(i);
+                String statusShort = "P";
+                if (r.getStatus() != null) {
+                    switch (r.getStatus()) {
+                        case APPROVED: statusShort = "A"; break;
+                        case REJECTED: statusShort = "R"; break;
+                        case IN_TRANSIT: statusShort = "T"; break;
+                        case DELIVERED: statusShort = "D"; break;
+                        case COMPLETED: statusShort = "C"; break;
+                        default: statusShort = "P"; break;
+                    }
+                }
+                table.addRow(
+                        String.valueOf(i + 1),
+                        r.getRequestId() != null ? r.getRequestId() : "N/A",
+                        r.getHospitalName() != null ? truncate(r.getHospitalName(), 26) : "N/A",
+                        r.getPatientName() != null ? truncate(r.getPatientName(), 10) : "N/A",
+                        r.getBloodType() != null ? r.getBloodType().getCode() : "N/A",
+                        r.getPriority() != null ? r.getPriority().name() : "N/A",
+                        statusShort
+                );
+            }
+        }
+
+        table.render();
+    }
+
+    /**
+     * Multi-criteria filtering by Blood Type, Priority Level, Requisition Status, or view reset.
+     *
+     * @param sc Scanner console input
+     * @param reqs Target mutable list of requisitions
+     */
+    public static void filterRequisitions(Scanner sc, List<BloodRequest> reqs) {
+        if (reqs == null) return;
+
+        System.out.println("\n>>> FILTER REQUISITIONS");
+        System.out.println("  [1] Filter by Blood Type");
+        System.out.println("  [2] Filter by Priority Level (URGENT / NORMAL)");
+        System.out.println("  [3] Filter by Requisition Status (PENDING / APPROVED / REJECTED / DELIVERED)");
+        System.out.println("  [4] Reset to All Requisitions");
+        System.out.println("  [0] Cancel / Back");
+
+        int choice = InputValidator.readInt(sc, "Enter filter option (0-4): ", 0, 4);
+        switch (choice) {
+            case 1:
+                System.out.println("\nSelect Blood Type to Filter:");
+                System.out.println("  [1] O-   [2] O+   [3] A-   [4] A+   [5] B-   [6] B+   [7] AB-   [8] AB+");
+                int btc = InputValidator.readInt(sc, "Enter choice (1-8): ", 1, 8);
+                BloodType[] types = BloodType.values();
+                if (btc >= 1 && btc <= types.length) {
+                    BloodType targetType = types[btc - 1];
+                    reqs.removeIf(r -> r.getBloodType() != targetType);
+                    System.out.println("[SUCCESS] Filtered to blood type: " + targetType.getCode() + " (" + reqs.size() + " matches)");
+                }
+                break;
+            case 2:
+                System.out.println("\nSelect Priority Level to Filter:");
+                System.out.println("  [1] URGENT");
+                System.out.println("  [2] NORMAL");
+                int pc = InputValidator.readInt(sc, "Enter choice (1-2): ", 1, 2);
+                PriorityLevel targetPriority = (pc == 1) ? PriorityLevel.URGENT : PriorityLevel.NORMAL;
+                reqs.removeIf(r -> r.getPriority() != targetPriority);
+                System.out.println("[SUCCESS] Filtered to priority: " + targetPriority + " (" + reqs.size() + " matches)");
+                break;
+            case 3:
+                System.out.println("\nSelect Requisition Status to Filter:");
+                System.out.println("  [1] PENDING");
+                System.out.println("  [2] APPROVED");
+                System.out.println("  [3] REJECTED");
+                System.out.println("  [4] IN_TRANSIT");
+                System.out.println("  [5] DELIVERED");
+                int scChoice = InputValidator.readInt(sc, "Enter choice (1-5): ", 1, 5);
+                RequisitionStatus[] statuses = RequisitionStatus.values();
+                if (scChoice >= 1 && scChoice <= statuses.length) {
+                    RequisitionStatus targetStatus = statuses[scChoice - 1];
+                    reqs.removeIf(r -> r.getStatus() != targetStatus);
+                    System.out.println("[SUCCESS] Filtered to status: " + targetStatus + " (" + reqs.size() + " matches)");
+                }
+                break;
+            case 4:
+                reqs.clear();
+                reqs.addAll(InspectionService.getInstance().getAllRequisitions());
+                System.out.println("[SUCCESS] All filters cleared. Showing " + reqs.size() + " total requisitions.");
+                break;
+            case 0:
+                System.out.println("  [Notice] Filter operation cancelled.");
+                break;
+        }
+    }
+
+    /**
+     * Multi-criteria sorting by Target Delivery Date, Priority Level, or Requisition ID.
+     *
+     * @param sc Scanner console input
+     * @param reqs Target mutable list of requisitions
+     */
+    public static void sortRequisitions(Scanner sc, List<BloodRequest> reqs) {
+        if (reqs == null || reqs.isEmpty()) {
+            System.out.println("  [Notice] No requisitions to sort.");
+            return;
+        }
+
+        System.out.println("\n>>> SORT REQUISITIONS");
+        System.out.println("  [1] Target Delivery Date (Earliest / Urgent First)");
+        System.out.println("  [2] Target Delivery Date (Latest First)");
+        System.out.println("  [3] Priority Level (URGENT First, then NORMAL)");
+        System.out.println("  [4] Requisition ID (Ascending)");
+        System.out.println("  [0] Cancel / Back");
+
+        int choice = InputValidator.readInt(sc, "Enter sort option (0-4): ", 0, 4);
+        switch (choice) {
+            case 1:
+                reqs.sort(Comparator.comparing(BloodRequest::getTargetTime, Comparator.nullsLast(Comparator.naturalOrder())));
+                System.out.println("[SUCCESS] Sorted by Target Delivery Date (Earliest first).");
+                break;
+            case 2:
+                reqs.sort(Comparator.comparing(BloodRequest::getTargetTime, Comparator.nullsLast(Comparator.reverseOrder())));
+                System.out.println("[SUCCESS] Sorted by Target Delivery Date (Latest first).");
+                break;
+            case 3:
+                reqs.sort((a, b) -> {
+                    if (a.getPriority() == b.getPriority()) {
+                        LocalDateTime t1 = a.getTargetTime();
+                        LocalDateTime t2 = b.getTargetTime();
+                        if (t1 == null && t2 == null) return 0;
+                        if (t1 == null) return 1;
+                        if (t2 == null) return -1;
+                        return t1.compareTo(t2);
+                    }
+                    return (a.getPriority() == PriorityLevel.URGENT) ? -1 : 1;
+                });
+                System.out.println("[SUCCESS] Sorted by Priority Level (URGENT first).");
+                break;
+            case 4:
+                reqs.sort(Comparator.comparing(BloodRequest::getRequestId, Comparator.nullsLast(Comparator.naturalOrder())));
+                System.out.println("[SUCCESS] Sorted by Requisition ID (Ascending).");
+                break;
+            case 0:
+                System.out.println("  [Notice] Sort operation cancelled.");
+                break;
+        }
+    }
+
+    /**
+     * Interactively processes a single hospital blood requisition (Approve & Allocate, Reject, or Cancel).
+     *
+     * @param sc Scanner console input
+     * @param req BloodRequest to process
+     */
+    public static void processSingleRequisition(Scanner sc, BloodRequest req) {
+        if (req == null) return;
+
+        System.out.println("\n>>> PROCESS REQUISITION " + req.getRequestId());
+        System.out.println("Hospital       : " + req.getHospitalName());
+        System.out.println("Patient        : " + req.getPatientName());
+        System.out.println("Requested Type : " + (req.getBloodType() != null ? req.getBloodType().getCode() : "N/A"));
+        System.out.println("Priority Level : " + req.getPriority());
+        System.out.println("Target Time    : " + req.getTargetTime());
+        System.out.println("Current Status : " + req.getStatus());
+
+        if (req.getStatus() != RequisitionStatus.PENDING) {
+            System.out.println("  [Notice] Requisition " + req.getRequestId() + " is currently in state: " + req.getStatus() + ".");
+            System.out.println("  Only PENDING requisitions can be processed (Approved or Rejected).");
+            return;
+        }
+
+        System.out.println("\n[Action] [1] Approve & Allocate Unit  [2] Reject Request  [0] Cancel");
+        int action = InputValidator.readInt(sc, "Enter choice (0-2): ", 0, 2);
+
+        if (action == 0) {
+            System.out.println("  [Action Cancelled] Returning to requisition list.");
+            return;
+        }
+
+        if (action == 1) {
+            try {
+                BloodUnit allocatedUnit = approveRequisition(req);
+                String strategyName = CentralInventory.getInstance().getAllocationStrategy() != null
+                        ? CentralInventory.getInstance().getAllocationStrategy().getStrategyName()
+                        : "FEFO";
+                System.out.println("[SUCCESS] Unit " + allocatedUnit.getUnitId() + " (" + allocatedUnit.getBloodType().getCode() + ") allocated via " + strategyName + " and assigned to " + req.getRequestId() + "!");
+                System.out.println("Requisition status updated to: APPROVED -> Enqueued to Logistics.");
+            } catch (InsufficientStockException e) {
+                System.out.println("[ERROR] Cannot allocate: " + e.getMessage());
+                System.out.println("Cannot approve requisition without available compatible stock in Central Inventory.");
+            }
+        } else if (action == 2) {
+            String reason = InputValidator.readNonBlankString(sc, "Enter clinical rejection reason: ");
+            rejectRequisition(req, reason);
+            System.out.println("[SUCCESS] Requisition " + req.getRequestId() + " marked as REJECTED.");
+            System.out.println("Clinical Rejection Reason: " + reason);
+        }
+    }
+
+    /**
+     * Programmatic approval helper allocating compatible unit from CentralInventory,
+     * binding Unit ID, setting status to APPROVED, and enqueuing to LogisticsService.
+     *
+     * @param req BloodRequest to approve
+     * @return the allocated BloodUnit
+     * @throws InsufficientStockException if compatible active stock is unavailable
+     */
+    public static BloodUnit approveRequisition(BloodRequest req) throws InsufficientStockException {
+        if (req == null) {
+            throw new IllegalArgumentException("BloodRequest cannot be null.");
+        }
+        CentralInventory inventory = CentralInventory.getInstance();
+        BloodUnit allocatedUnit = inventory.allocateUnit(req.getBloodType(), req.getRequestId());
+        req.setAssignedUnitId(allocatedUnit.getUnitId());
+        req.setStatus(RequisitionStatus.APPROVED);
+        LogisticsService.getInstance().enqueue(req);
+        return allocatedUnit;
+    }
+
+    /**
+     * Programmatic rejection helper setting status to REJECTED.
+     *
+     * @param req BloodRequest to reject
+     * @param reason Clinical reason
+     */
+    public static void rejectRequisition(BloodRequest req, String reason) {
+        if (req == null) return;
+        req.setStatus(RequisitionStatus.REJECTED);
+    }
+
+    private static String truncate(String text, int maxLen) {
+        if (text == null) return "";
+        if (text.length() <= maxLen) return text;
+        return text.substring(0, maxLen - 3) + "...";
     }
 
     /** Option [3] Placeholder: Clinical Intake Pipeline */
