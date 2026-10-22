@@ -6,6 +6,14 @@ public class Patient extends User {
         this.patientBloodType = patientBloodType;
     }
 
+    public Patient(String id, String fullName, String password, BloodType patientBloodType) {
+        this(id, fullName, "Walk-in", password, patientBloodType);
+    }
+
+    public Patient(String fullName, BloodType patientBloodType, String id, String password) {
+        this(id, fullName, "Walk-in", password, patientBloodType);
+    }
+
     public BloodType getPatientBloodType() {
         return patientBloodType;
     }
