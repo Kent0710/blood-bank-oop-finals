@@ -30,10 +30,10 @@ public class Main {
 
                 switch (choice) {
                     case 1:
-                        System.out.println(">> Sign In selected (Pending AuthController in Sprint 3)");
+                        AuthController.handleLogin(scanner);
                         break;
                     case 2:
-                        System.out.println(">> Create Account selected (Pending AuthController in Sprint 3)");
+                        AuthController.handlePublicRegistration(scanner);
                         break;
                     case 3:
                         System.out.println("\nThank you for using the Blood Bank System. System terminated safely.");

@@ -350,7 +350,64 @@ public class TestRunner {
 
     private static void testIssue9() { verifyClassPresence(9, "HospitalAdminController"); }
     private static void testIssue10() { verifyClassPresence(10, "LogisticsController", "PatientController"); }
-    private static void testIssue11() { verifyClassPresence(11, "AuthController"); }
+    private static void testIssue11() {
+        if (!classExists("AuthController")) {
+            skipIssue(11, "AuthController not found yet.");
+            return;
+        }
+
+        try {
+            Class<?> authClass = Class.forName("AuthController");
+            assertCondition(hasMethod(authClass, "startAuthFlow"), "AuthController contains startAuthFlow method");
+            assertCondition(hasMethod(authClass, "handleLogin"), "AuthController contains handleLogin method");
+            assertCondition(hasMethod(authClass, "handlePublicRegistration"), "AuthController contains handlePublicRegistration method");
+
+            // Test public registration of patient
+            Patient p = AuthController.registerPatient("John Doe", BloodType.O_POS, "password123");
+            assertCondition(p != null && p.getId() != null && p.getId().startsWith("PA-"),
+                    "AuthController registers patient with PA- prefix: " + (p != null ? p.getId() : "null"));
+
+            // Test successful authentication
+            User loggedIn = AuthController.login(p.getId(), "password123");
+            assertCondition(loggedIn != null && loggedIn.getId().equals(p.getId()),
+                    "AuthController successfully logs in with valid credentials");
+
+            // Test failed password authentication
+            boolean passwordFailed = false;
+            try {
+                AuthController.login(p.getId(), "wrongpassword");
+            } catch (AuthenticationException e) {
+                passwordFailed = true;
+            }
+            assertCondition(passwordFailed, "AuthController rejects incorrect password with AuthenticationException");
+
+            // Test non-existent account authentication
+            boolean userNotFound = false;
+            try {
+                AuthController.login("PA-999999", "any");
+            } catch (UserNotFoundException e) {
+                userNotFound = true;
+            }
+            assertCondition(userNotFound, "AuthController rejects unknown account ID with UserNotFoundException");
+
+            // Test archived account login rejection
+            p.setArchived(true);
+            boolean archivedRejected = false;
+            try {
+                AuthController.login(p.getId(), "password123");
+            } catch (AuthenticationException e) {
+                archivedRejected = true;
+            }
+            assertCondition(archivedRejected, "AuthController rejects archived/disabled account with AuthenticationException");
+
+            // Restore user state
+            p.setArchived(false);
+
+            passTest("Issue #11: AuthController, public registration, credential validation, and security checks verified.");
+        } catch (Exception e) {
+            failTest("Issue #11 error: " + e.getMessage());
+        }
+    }
     private static void testIssue12() { verifyClassPresence(12, "SuperAdminController"); }
     private static void testIssue13() { verifyClassPresence(13, "SuperAdminController"); }
     private static void testIssue14() { verifyClassPresence(14, "SuperAdminController"); }
