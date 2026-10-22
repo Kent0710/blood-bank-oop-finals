@@ -592,10 +592,172 @@ public class SuperAdminController {
         System.out.println("[SUCCESS] Active allocation strategy updated to: " + inv.getAllocationStrategy().getStrategyName());
     }
 
-    /** Option [10] Placeholder: User Account Management (Issue #14) */
-    protected static void manageUserAccounts(Scanner sc) {
-        System.out.println("\n>>> MANAGE USER ACCOUNTS");
-        System.out.println("  [Notice] User Ledger Management (Archive / Delete) is scheduled for Milestone 4 (Issue #14).");
+    /**
+     * Option [10]: Manage User Accounts.
+     * Renders all registered system users in an ASCII ledger table,
+     * supports toggling archive status (disable/enable) and permanent deletion.
+     * Protects primary Super Admin account (BB-1001) from deletion or archiving.
+     *
+     * @param sc Scanner console input
+     */
+    public static void manageUserAccounts(Scanner sc) {
+        if (sc == null) {
+            sc = new Scanner(System.in);
+        }
+
+        boolean inLedger = true;
+        while (inLedger) {
+            System.out.println();
+            renderUserAccountLedger();
+
+            System.out.println("\nAccount Management: [1] Toggle Disable/Archive  [2] Delete Account Permanently  [0] Cancel");
+            int choice = InputValidator.readInt(sc, "Enter choice (0-2): ", 0, 2);
+
+            switch (choice) {
+                case 1:
+                    toggleUserArchiveStatus(sc);
+                    break;
+                case 2:
+                    deleteUserPermanently(sc);
+                    break;
+                case 0:
+                    inLedger = false;
+                    break;
+            }
+        }
+    }
+
+    /**
+     * Renders all registered system users in an ASCII ledger table using TableRenderer.
+     */
+    private static void renderUserAccountLedger() {
+        UserService userService = UserService.getInstance();
+        List<User> users = userService.getAllUsers();
+
+        TableRenderer table = new TableRenderer()
+                .withTitle("USER ACCOUNT LEDGER")
+                .addHeaders("#", "Account ID", "Name", "Role", "Hospital", "Status");
+
+        for (int i = 0; i < users.size(); i++) {
+            User u = users.get(i);
+            String hospital = u.getHospitalAffiliation();
+            if (hospital == null || hospital.trim().isEmpty() || hospital.equalsIgnoreCase("N/A")) {
+                hospital = "N/A";
+            }
+            String status = u.isArchived() ? "ARCHIVED" : "ACTIVE";
+
+            table.addRow(
+                    String.valueOf(i + 1),
+                    u.getId() != null ? u.getId() : "N/A",
+                    u.getName() != null ? truncate(u.getName(), 21) : "N/A",
+                    u.getRole() != null ? u.getRole().name() : "N/A",
+                    truncate(hospital, 18),
+                    status
+            );
+        }
+
+        table.render();
+    }
+
+    /**
+     * Toggles the archive (disabled/enabled) status of a user account.
+     * Prevents primary Super Admin (BB-1001) from being archived.
+     *
+     * @param sc Scanner console input
+     */
+    public static void toggleUserArchiveStatus(Scanner sc) {
+        UserService userService = UserService.getInstance();
+        if (userService.isEmpty()) {
+            System.out.println("  [Notice] No accounts exist in the ledger.");
+            return;
+        }
+
+        String accountId = InputValidator.readValidAccountId(sc, "Enter Account ID to toggle: ");
+        User user = userService.getUserById(accountId);
+
+        if (user == null) {
+            System.out.println("  [Error] No account found matching Account ID: '" + accountId + "'.");
+            return;
+        }
+
+        if (isPrimarySuperAdmin(user.getId())) {
+            System.out.println("  [Operation Denied] Primary Super Admin account (BB-1001) cannot be disabled or archived.");
+            return;
+        }
+
+        boolean newStatus = !user.isArchived();
+        user.setArchived(newStatus);
+        String statusLabel = newStatus ? "ARCHIVED" : "ACTIVE";
+        System.out.println("[SUCCESS] Account " + user.getId() + " status changed to: " + statusLabel);
+    }
+
+    /**
+     * Permanently deletes a user account after explicit user confirmation.
+     * Prevents primary Super Admin (BB-1001) from being deleted.
+     *
+     * @param sc Scanner console input
+     */
+    public static void deleteUserPermanently(Scanner sc) {
+        UserService userService = UserService.getInstance();
+        if (userService.isEmpty()) {
+            System.out.println("  [Notice] No accounts exist in the ledger.");
+            return;
+        }
+
+        String accountId = InputValidator.readValidAccountId(sc, "Enter Account ID to delete: ");
+        User user = userService.getUserById(accountId);
+
+        if (user == null) {
+            System.out.println("  [Error] No account found matching Account ID: '" + accountId + "'.");
+            return;
+        }
+
+        if (isPrimarySuperAdmin(user.getId())) {
+            System.out.println("  [Operation Denied] Primary Super Admin account (BB-1001) cannot be permanently deleted.");
+            return;
+        }
+
+        boolean confirm = InputValidator.readBoolean(sc, "Are you sure you want to permanently delete account '" + user.getName() + "' (" + user.getId() + ")? (y/n): ");
+        if (confirm) {
+            userService.deleteUser(user.getId());
+            System.out.println("[SUCCESS] Account " + user.getId() + " has been permanently deleted.");
+        } else {
+            System.out.println("  [Action Cancelled] Account deletion cancelled.");
+        }
+    }
+
+    /**
+     * Programmatic helper to toggle user archive status.
+     *
+     * @param accountId Account ID
+     * @return true if status was toggled; false if user not found or is primary admin
+     */
+    public static boolean toggleUserArchive(String accountId) {
+        if (accountId == null || isPrimarySuperAdmin(accountId)) return false;
+        UserService userService = UserService.getInstance();
+        User user = userService.getUserById(accountId);
+        if (user == null) return false;
+        user.setArchived(!user.isArchived());
+        return true;
+    }
+
+    /**
+     * Programmatic helper to permanently delete a user.
+     *
+     * @param accountId Account ID
+     * @return true if user was deleted; false if user not found or is primary admin
+     */
+    public static boolean deleteUser(String accountId) {
+        if (accountId == null || isPrimarySuperAdmin(accountId)) return false;
+        UserService userService = UserService.getInstance();
+        User user = userService.getUserById(accountId);
+        if (user == null) return false;
+        userService.deleteUser(accountId);
+        return true;
+    }
+
+    private static boolean isPrimarySuperAdmin(String accountId) {
+        return accountId != null && accountId.trim().equalsIgnoreCase("BB-1001");
     }
 
     /** Option [11] Placeholder: Logistics Console (Issue #10) */
