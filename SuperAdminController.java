@@ -80,10 +80,10 @@ public class SuperAdminController {
                         reviewRequisitions(sc);
                         break;
                     case 3:
-                        storeBloodHospital(sc);
+                        storeBloodFromHospital(sc);
                         break;
                     case 4:
-                        storeBloodDrive(sc);
+                        storeBloodFromOrganization(sc);
                         break;
                     case 5:
                         viewInventoryLedger();
@@ -493,16 +493,40 @@ public class SuperAdminController {
         return text.substring(0, maxLen - 3) + "...";
     }
 
-    /** Option [3] Placeholder: Clinical Intake Pipeline */
-    protected static void storeBloodHospital(Scanner sc) {
+    // Method: Option [3] Store Blood from Hospital
+    private static void storeBloodFromHospital(Scanner sc) {
+        // Prompts source hospital and launches PipelineHelper.runClinicalIntakePipeline(sc, hospitalName, reprompt).
+        // Adds resulting unit to CentralInventory.
         System.out.println("\n>>> STORE BLOOD FROM HOSPITAL");
-        System.out.println("  [Notice] Hospital Blood Intake Pipeline is coordinated via PipelineHelper (Issue #5).");
+        String hospitalName = InputValidator.readNonBlankString(sc, "  Enter Source Hospital Name: ");
+        BloodUnit unit = PipelineHelper.runClinicalIntakePipeline(sc, hospitalName, null);
+        if (unit != null) {
+            CentralInventory.getInstance().addUnit(unit);
+            System.out.println("[SUCCESS] Hospital unit " + unit.getUnitId() + " (" + unit.getBloodType().getCode() + " " + unit.getComponent().name() + ") added to Central Inventory active ledger.");
+        }
     }
 
-    /** Option [4] Placeholder: Mobile Blood Drive Intake */
+    // Method: Option [4] Store Blood from Organization Blood Drive
+    private static void storeBloodFromOrganization(Scanner sc) {
+        // Prompts sponsoring organization name (e.g. Red Cross, University Drive).
+        // Launches PipelineHelper.runClinicalIntakePipeline(sc, orgName, reprompt).
+        // Adds resulting unit to CentralInventory.
+        System.out.println("\n>>> STORE BLOOD FROM ORGANIZATION BLOOD DRIVE");
+        String orgName = InputValidator.readNonBlankString(sc, "  Enter Sponsoring Organization Name (e.g. Red Cross, University Drive): ");
+        BloodUnit unit = PipelineHelper.runClinicalIntakePipeline(sc, orgName, null);
+        if (unit != null) {
+            CentralInventory.getInstance().addUnit(unit);
+            System.out.println("[SUCCESS] Organization drive unit " + unit.getUnitId() + " (" + unit.getBloodType().getCode() + " " + unit.getComponent().name() + ") added to Central Inventory active ledger.");
+        }
+    }
+
+    // Backward compatibility aliases
+    protected static void storeBloodHospital(Scanner sc) {
+        storeBloodFromHospital(sc);
+    }
+
     protected static void storeBloodDrive(Scanner sc) {
-        System.out.println("\n>>> STORE BLOOD FROM ORGANIZATION DRIVE");
-        System.out.println("  [Notice] Organization Blood Drive Intake Pipeline is coordinated via PipelineHelper (Issue #5).");
+        storeBloodFromOrganization(sc);
     }
 
     /** Option [5]: View Central Inventory Active Stock with Low-Stock Red Alerts (Issue #15) */
