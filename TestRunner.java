@@ -292,15 +292,53 @@ public class TestRunner {
         boolean hasInsp = classExists("InspectionService");
         boolean hasLog = classExists("LogisticsService");
 
-        if (!hasUser && !hasInsp && !hasLog) {
-            skipIssue(8, "Core services not found yet.");
+        if (!hasUser || !hasInsp || !hasLog) {
+            skipIssue(8, "Core services (UserService, InspectionService, LogisticsService) not all found yet.");
             return;
         }
 
         try {
-            if (hasUser) passTest("UserService present and verified.");
-            if (hasInsp) passTest("InspectionService present and verified.");
-            if (hasLog) passTest("LogisticsService present and verified.");
+            // Test UserService
+            UserService userService = UserService.getInstance();
+            assertCondition(userService != null, "UserService singleton instance exists");
+            assertCondition(userService == UserService.getInstance(), "UserService satisfies singleton identity");
+
+            String bbId = userService.generateId(Roles.SUPER_ADMIN);
+            String haId = userService.generateId(Roles.HOSPITAL_ADMIN);
+            String lgId = userService.generateId(Roles.LOGISTICS);
+            String paId = userService.generateId(Roles.PATIENT);
+
+            assertCondition(bbId.startsWith("BB-"), "UserService generates BB- prefix for SUPER_ADMIN");
+            assertCondition(haId.startsWith("HA-"), "UserService generates HA- prefix for HOSPITAL_ADMIN");
+            assertCondition(lgId.startsWith("LG-"), "UserService generates LG- prefix for LOGISTICS");
+            assertCondition(paId.startsWith("PA-"), "UserService generates PA- prefix for PATIENT");
+
+            // Test InspectionService & 48h auto-escalation
+            InspectionService inspService = InspectionService.getInstance();
+            assertCondition(inspService != null, "InspectionService singleton instance exists");
+            assertCondition(inspService == InspectionService.getInstance(), "InspectionService satisfies singleton identity");
+
+            LocalDateTime soon = LocalDateTime.now().plusHours(24);
+            BloodRequest urgentAuto = inspService.submitRequisition("St. Jude", "John Doe", BloodType.O_POS, PriorityLevel.NORMAL, soon);
+            assertCondition(urgentAuto.getPriority() == PriorityLevel.URGENT, "Requisition within 48h auto-escalates to URGENT priority");
+
+            LocalDateTime later = LocalDateTime.now().plusHours(72);
+            BloodRequest normalReq = inspService.submitRequisition("General Hospital", "Jane Smith", BloodType.A_POS, PriorityLevel.NORMAL, later);
+            assertCondition(normalReq.getPriority() == PriorityLevel.NORMAL, "Requisition beyond 48h preserves NORMAL priority");
+
+            // Test LogisticsService
+            LogisticsService logService = LogisticsService.getInstance();
+            assertCondition(logService != null, "LogisticsService singleton instance exists");
+            assertCondition(logService == LogisticsService.getInstance(), "LogisticsService satisfies singleton identity");
+
+            assertCondition(!logService.getUrgentQueue().isEmpty(), "LogisticsService urgent queue contains auto-escalated request");
+            assertCondition(!logService.getScheduledQueue().isEmpty(), "LogisticsService scheduled queue contains normal request");
+
+            // Test dispatchUnit
+            logService.dispatchUnit(urgentAuto.getRequestId());
+            assertCondition(urgentAuto.getStatus() == RequisitionStatus.DELIVERED, "dispatchUnit sets requisition status to DELIVERED");
+
+            passTest("Issue #8: Core singleton services, ID generators, auto-escalation, and queues fully verified.");
         } catch (Exception e) {
             failTest("Issue #8 error: " + e.getMessage());
         }
