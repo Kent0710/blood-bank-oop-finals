@@ -9,6 +9,7 @@ public class HospitalAdmin extends User {
 
     public void setHospitalAffiliation(String hospitalAffiliation) {
         this.hospitalAffiliation = hospitalAffiliation;
+        super(id, fullName, Roles.HOSPITAL_ADMIN, hospitalAffiliation != null ? hospitalAffiliation : "N/A", password);
     }
 
     @Override

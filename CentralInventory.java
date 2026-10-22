@@ -208,6 +208,33 @@ public class CentralInventory {
         return lowStock;
     }
 
+    /**
+     * Returns true if any blood type active count is below the low stock threshold.
+     */
+    public synchronized boolean hasLowStockAlerts() {
+        return !getLowStockBloodTypes().isEmpty();
+    }
+
+    /**
+     * Renders the critical red alert banner for blood types below safety threshold.
+     */
+    public synchronized void printLowStockAlerts() {
+        List<BloodType> lowStock = getLowStockBloodTypes();
+        if (lowStock.isEmpty()) {
+            return;
+        }
+
+        Map<BloodType, Long> counts = getStockCounts();
+        System.out.println("================================================================================");
+        System.out.printf("  [CRITICAL ALERT] The following blood types are BELOW safety threshold (%d units):%n", lowStockThreshold);
+        for (BloodType bt : lowStock) {
+            long count = counts.getOrDefault(bt, 0L);
+            String urgency = (count == 0) ? "(CRITICAL STOCK DEPLETION)" : "(URGENT REPLENISHMENT REQUIRED)";
+            System.out.printf("    - %-4s : %d units available %s%n", bt.getCode(), count, urgency);
+        }
+        System.out.println("================================================================================");
+    }
+
     // Dynamic Strategy & Configuration Accessors
 
     public synchronized void setAllocationStrategy(AllocationStrategy strategy) {

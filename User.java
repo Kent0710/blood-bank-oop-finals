@@ -21,6 +21,7 @@ public abstract class User {
     public String getName() { return fullName; }
     public Roles getRole() { return role; }
     public String getHospitalAffiliation() { return hospitalAffiliation; }
+    public void setHospitalAffiliation(String hospitalAffiliation) { this.hospitalAffiliation = hospitalAffiliation; }
     public boolean isArchived() { return archived; }
     public boolean isActive() { return !archived; }
     public void setArchived(boolean archived) { this.archived = archived; }
