@@ -10,17 +10,9 @@ public class Main {
     public static void main(String[] args) {
         Scanner scanner = new Scanner(System.in);
 
-        // Ensure default master Super Admin account exists on clean startup
-        UserService userService = UserService.getInstance();
-        if (userService.getUserById("BB-1001") == null) {
-            userService.registerUser(new BloodBank("BB-1001", "Master Super Admin", "admin123"));
-        }
-
         System.out.println("================================================================================");
         System.out.println("       CENTRAL BLOOD BANK MANAGEMENT & LOGISTICS DISTRIBUTION SYSTEM        ");
         System.out.println("================================================================================");
-        System.out.println("  [INFO] System initialized with clean storage state.");
-        System.out.println("  [INFO] Master Super Admin account active (BB-1001).");
 
         Runnable printMainMenu = () -> {
             System.out.println("+----------------------- MAIN SYSTEM MENU -----------------------+");

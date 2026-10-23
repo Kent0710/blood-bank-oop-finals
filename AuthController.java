@@ -70,7 +70,7 @@ public class AuthController {
 
         if (userService.isEmpty()) {
             System.out.println("  [Notice] No registered accounts exist in the system yet.");
-            System.out.println("  Please select [2] Create account from the Main Menu to register a Patient account.");
+            System.out.println("  Please select [2] Create account from the Main Menu to register your Super Admin or Patient account.");
             return;
         }
 
