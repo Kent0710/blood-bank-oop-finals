@@ -43,7 +43,7 @@ public class AuthController {
                         handleLogin(sc);
                         break;
                     case 2:
-                        handlePublicRegistration(sc);
+                        handleCreateAccount(sc);
                         break;
                     case 3:
                         System.out.println("\nThank you for using the Central Blood Bank System. Goodbye!");
@@ -93,23 +93,61 @@ public class AuthController {
     }
 
     /**
-     * Self-service public registration for walk-in patients.
-     * Collects patient name, blood type, and password, generates a PA-xxxx ID,
-     * and registers the new Patient account.
+     * Public account creation flow.
+     * Selects account type: [1] Blood Bank (Super Admin) or [2] Patient.
      */
-    public static void handlePublicRegistration(Scanner sc) {
-        System.out.println("\n>>> CREATE ACCOUNT (Public Registration)");
-        System.out.println("Self-service walk-in patient registration.");
+    public static void handleCreateAccount(Scanner sc) {
+        UserService userService = UserService.getInstance();
+        Runnable printCreateMenu = () -> {
+            System.out.println("--- Create Account ---");
+            System.out.println("Select account type to register:");
+            System.out.println("[1] Blood Bank (Super Admin)");
+            System.out.println("[2] Patient");
+            System.out.println("Note: Hospital Admin and Logistics Manager accounts are employee roles");
+            System.out.println("      and must be provisioned by an authorized Blood Bank Super Admin.");
+        };
+
+        System.out.println();
+        printCreateMenu.run();
+        int typeChoice = InputValidator.readInteger(sc, "Enter choice (1-2): ", 1, 2, printCreateMenu);
 
         String name = InputValidator.readValidName(sc, "Enter full name: ");
-        BloodType bloodType = promptBloodType(sc);
-        String password = InputValidator.readValidPassword(sc, "Set password: ");
 
-        Patient patient = registerPatient(name, bloodType, password);
-        printAccountCreationReceipt(patient.getId(), patient.getName(), bloodType);
+        User newUser = null;
+        switch (typeChoice) {
+            case 1:
+                String bbPass = InputValidator.readValidPassword(sc, "Set Account Password: ");
+                String generatedBbId = userService.generateUniqueAccountId(Roles.SUPER_ADMIN);
+                BloodBank bb = new BloodBank(generatedBbId, name, bbPass);
+                userService.registerUser(bb);
+                newUser = bb;
 
-        System.out.println("\n>> Successfully signed in as " + patient.getName() + " [" + patient.getId() + "]!");
-        routeToRoleDashboard(sc, patient);
+                printAccountCreationReceipt(bb.getAccountId(), bb.getName(), "Blood Bank Super Admin");
+                break;
+            case 2:
+                BloodType bt = promptBloodType(sc);
+                String patPass = InputValidator.readValidPassword(sc, "Set Account Password: ");
+                String generatedPatId = userService.generateUniqueAccountId(Roles.PATIENT);
+                Patient patient = new Patient(generatedPatId, name, patPass, bt);
+                userService.registerUser(patient);
+                newUser = patient;
+
+                printAccountCreationReceipt(patient.getAccountId(), patient.getName(), "Patient (" + bt.getLabel() + ")");
+                break;
+        }
+
+        if (newUser != null) {
+            System.out.println("\n>> Successfully signed in as " + newUser.getName() + " [" + newUser.getAccountId() + "]!");
+            System.out.println("Privileges: " + newUser.getRoleDescription());
+            routeToRoleDashboard(sc, newUser);
+        }
+    }
+
+    /**
+     * Self-service public registration for walk-in patients (delegates to handleCreateAccount).
+     */
+    public static void handlePublicRegistration(Scanner sc) {
+        handleCreateAccount(sc);
     }
 
     /**
@@ -162,38 +200,23 @@ public class AuthController {
      * Prompts and validates an ABO/Rh blood type from console input.
      */
     public static BloodType promptBloodType(Scanner sc) {
-        BloodType bloodType = null;
-        while (bloodType == null) {
-            System.out.print("Enter ABO/Rh Blood Type (e.g. O+, A-, B+, AB-): ");
-            String input = sc.nextLine();
-            if (input == null) continue;
-            input = input.trim();
-
-            if (input.isEmpty()) {
-                System.out.println("  [Validation Error] Blood type cannot be empty.");
-                continue;
-            }
-
-            try {
-                bloodType = BloodType.fromString(input);
-            } catch (IllegalArgumentException e) {
-                System.out.println("  [Validation Error] Invalid blood type: '" + input + "'. (Allowed: O+, O-, A+, A-, B+, B-, AB+, AB-)");
-            }
-        }
-        return bloodType;
+        return PipelineHelper.promptBloodType(sc);
     }
 
-    private static void printAccountCreationReceipt(String accountId, String name, BloodType bloodType) {
+    private static void printAccountCreationReceipt(String accountId, String name, String roleTitle) {
         System.out.println("\n+-----------------------------------------------------------------------------------+");
         System.out.println("|                            ACCOUNT CREATED SUCCESSFULLY                           |");
         System.out.println("+----------------------+------------------------------------------------------------+");
         System.out.printf("| %-20s | %-58s |\n", "Generated Account ID", accountId);
         System.out.printf("| %-20s | %-58s |\n", "Account Holder", name);
-        System.out.printf("| %-20s | %-58s |\n", "Blood Type", (bloodType != null ? bloodType.getCode() : "N/A"));
-        System.out.printf("| %-20s | %-58s |\n", "Role Classification", "Patient");
+        System.out.printf("| %-20s | %-58s |\n", "Role Classification", roleTitle);
         System.out.println("+----------------------+------------------------------------------------------------+");
         System.out.printf("| %-81s |\n", ">> IMPORTANT: Remember your Account ID (" + accountId + ") to sign in later!");
         System.out.println("+-----------------------------------------------------------------------------------+");
+    }
+
+    private static void printAccountCreationReceipt(String accountId, String name, BloodType bloodType) {
+        printAccountCreationReceipt(accountId, name, "Patient (" + (bloodType != null ? bloodType.getLabel() : "N/A") + ")");
     }
 
     private static void invokeControllerMethod(String className, String methodName, Scanner sc, User user, Class<?> userClass) {
@@ -239,10 +262,6 @@ public class AuthController {
     // Instance method aliases for polymorphic / instance-based controllers
     public void handleSignIn(Scanner scanner) {
         handleLogin(scanner);
-    }
-
-    public void handleCreateAccount(Scanner scanner) {
-        handlePublicRegistration(scanner);
     }
 
     public void navigateRoleDashboard(Scanner scanner, User user) {

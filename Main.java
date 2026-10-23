@@ -35,7 +35,6 @@ public class Main {
             try {
                 System.out.println();
                 printMainMenu.run();
-                System.out.println();
                 int choice = InputValidator.readInt(scanner, "Enter choice (1-3): ", 1, 3, printMainMenu);
 
                 switch (choice) {
@@ -43,7 +42,7 @@ public class Main {
                         AuthController.handleLogin(scanner);
                         break;
                     case 2:
-                        AuthController.handlePublicRegistration(scanner);
+                        AuthController.handleCreateAccount(scanner);
                         break;
                     case 3:
                         System.out.println("\nThank you for using the Blood Bank System. System terminated safely.");

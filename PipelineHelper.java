@@ -189,4 +189,27 @@ public class PipelineHelper {
                 unit.getUnitId(), unit.getBloodType().getCode(), unit.getComponent().name());
         System.out.println("------------------------------------------------------------");
     }
+
+    /**
+     * Prompts for and returns a BloodType selection from numbered menu.
+     */
+    public static BloodType promptBloodType(Scanner scanner) {
+        Runnable printBtMenu = () -> {
+            System.out.println("Select Blood Type:");
+            System.out.println("[1] O-   [2] O+   [3] A-   [4] A+   [5] B-   [6] B+   [7] AB-   [8] AB+");
+        };
+        printBtMenu.run();
+        int sel = InputValidator.readInteger(scanner, "Enter choice (1-8): ", 1, 8, printBtMenu);
+        switch (sel) {
+            case 1: return BloodType.O_NEG;
+            case 2: return BloodType.O_POS;
+            case 3: return BloodType.A_NEG;
+            case 4: return BloodType.A_POS;
+            case 5: return BloodType.B_NEG;
+            case 6: return BloodType.B_POS;
+            case 7: return BloodType.AB_NEG;
+            case 8: return BloodType.AB_POS;
+            default: return BloodType.O_POS;
+        }
+    }
 }

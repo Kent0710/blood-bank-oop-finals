@@ -35,15 +35,28 @@ public class UserService {
         if (role == null) {
             return "USR-" + System.currentTimeMillis();
         }
+        String id;
         switch (role) {
             case SUPER_ADMIN:
-                return "BB-" + (++superAdminCounter);
+                do {
+                    id = "BB-" + (++superAdminCounter);
+                } while (users.containsKey(id));
+                return id;
             case HOSPITAL_ADMIN:
-                return "HA-" + (++hospitalAdminCounter);
+                do {
+                    id = "HA-" + (++hospitalAdminCounter);
+                } while (users.containsKey(id));
+                return id;
             case LOGISTICS:
-                return "LG-" + (++logisticsCounter);
+                do {
+                    id = "LG-" + (++logisticsCounter);
+                } while (users.containsKey(id));
+                return id;
             case PATIENT:
-                return "PA-" + (++patientCounter);
+                do {
+                    id = "PA-" + (++patientCounter);
+                } while (users.containsKey(id));
+                return id;
             default:
                 return "USR-" + System.currentTimeMillis();
         }
