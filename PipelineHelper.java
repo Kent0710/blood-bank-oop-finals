@@ -191,6 +191,66 @@ public class PipelineHelper {
     }
 
     /**
+     * Executes the complete 5-stage clinical intake pipeline matching root terminal specification.
+     */
+    public static void executeFullProcessingPipeline(Scanner scanner,
+                                                    String sourceCategory,
+                                                    CentralInventory centralInventory,
+                                                    InspectionService inspectionService,
+                                                    LogisticsService logisticsService) {
+        System.out.println("\n====================================================================");
+        System.out.println("   Complete Blood Processing Pipeline (" + sourceCategory + " -> Blood Bank)");
+        System.out.println("====================================================================");
+
+        // Stage 1: Collection
+        System.out.println("--- [Processing Pipeline: Stage 1 - Collection of Blood Data] ---");
+        String sourceName = InputValidator.readValidName(scanner, "Enter " + sourceCategory + " Name: ");
+        String din = InputValidator.readValidDIN(scanner, "Enter Donation Identification Number (DIN) (e.g. DIN-1001): ");
+        BloodType bloodType = promptBloodType(scanner);
+
+        int daysAgo = InputValidator.readInteger(scanner, "Enter days ago collected (0 to 60): ", 0, 60);
+        LocalDate collectionDate = LocalDate.now().minusDays(daysAgo);
+
+        double temp = InputValidator.readDouble(scanner, "Enter measured blood bag temperature in °C (-5.0 to 40.0): ", -5.0, 40.0);
+        boolean contaminated = InputValidator.readBoolean(scanner, "Is there any serological or bacterial contamination? (y/n): ");
+
+        BloodUnit unit = new BloodUnit(din, bloodType, sourceCategory + ": " + sourceName, collectionDate, 42, temp, contaminated);
+
+        // Logistics Intake Transport
+        logisticsService.performIntakeTransport(unit, sourceName);
+
+        // Stage 2: MLS Testing
+        boolean mlsPassed = inspectionService.performMLSInspection(unit);
+
+        // Stage 3: Processing & Separation
+        Runnable printCompMenu = () -> {
+            System.out.println("Select component preparation after centrifugation:");
+            System.out.println("[1] Whole Blood (Standard Lifespan: 42 days)");
+            System.out.println("[2] Packed Red Blood Cells / PRBC (Standard Lifespan: 42 days)");
+            System.out.println("[3] Fresh Frozen Plasma / FFP (Standard Lifespan: 365 days)");
+            System.out.println("[4] Platelets (Standard Lifespan: 7 days)");
+        };
+
+        System.out.println();
+        printCompMenu.run();
+        int compChoice = InputValidator.readInteger(scanner, "Enter component choice (1-4): ", 1, 4, printCompMenu);
+        BloodComponent chosenComp = BloodComponent.fromChoice(String.valueOf(compChoice));
+        inspectionService.processAndSeparateComponent(unit, chosenComp);
+
+        // Stage 4: Scientist DIN scanning
+        inspectionService.scanAndLogUnit(unit);
+
+        // Stage 5: Super Admin Decision
+        System.out.println("\n>> [Blood Bank Super Admin Review]");
+        System.out.println("   Unit DIN             : " + unit.getDin());
+        System.out.println("   Component            : " + unit.getComponent().getDisplayName());
+        System.out.println("   MLS Inspection Result: " + (mlsPassed ? "PASSED" : "FAILED"));
+        boolean approve = InputValidator.readBoolean(scanner, "Do you approve storing this unit into Central Inventory? (y/n): ");
+
+        inspectionService.reviewAndDecide(unit, approve, centralInventory);
+    }
+
+    /**
      * Prompts for and returns a BloodType selection from numbered menu.
      */
     public static BloodType promptBloodType(Scanner scanner) {

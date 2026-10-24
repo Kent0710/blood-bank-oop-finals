@@ -3,18 +3,42 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.Arrays;
 
-
 public class TableRenderer {
     private String title;
     private List<String> headers = new ArrayList<>();
     private List<List<String>> rows = new ArrayList<>();
     private int pageSize = 10;
     private int currentPage = 1;
+    private String emptyMessage = "(No Records Found)";
+
+    public TableRenderer() {
+    }
+
+    public TableRenderer(String title, String[] headers) {
+        this.title = title;
+        if (headers != null) {
+            this.headers.addAll(Arrays.asList(headers));
+        }
+    }
+
+    public TableRenderer(String... headers) {
+        this(null, headers);
+    }
 
     public TableRenderer withTitle(String title) { 
         this.title = title;
         return this;
-     }
+    }
+
+    public void setTitle(String title) {
+        this.title = title;
+    }
+
+    public void setEmptyMessage(String emptyMessage) {
+        if (emptyMessage != null) {
+            this.emptyMessage = emptyMessage;
+        }
+    }
 
     public TableRenderer withPageSize(int pageSize) {
         if (pageSize <= 0) {
@@ -37,16 +61,28 @@ public class TableRenderer {
         this.headers.addAll(Arrays.asList(headers));
         return this;
     }
+
     public TableRenderer addRow(String... rows) {
-        if (rows.length != headers.size()){
-            throw new IllegalArgumentException("Excpeted " + headers.size() + " columns, but got " + rows.length);
+        List<String> list = new ArrayList<>();
+        int colCount = Math.max(headers.size(), rows.length);
+        for (int i = 0; i < colCount; i++) {
+            if (i < rows.length && rows[i] != null) {
+                list.add(rows[i]);
+            } else {
+                list.add("");
+            }
         }
-        this.rows.add(Arrays.asList(rows));
+        if (headers.size() < list.size()) {
+            for (int i = headers.size(); i < list.size(); i++) {
+                headers.add("");
+            }
+        }
+        this.rows.add(list);
         return this;
     }
 
     public void render() {
-        if (headers.isEmpty()){
+        if (headers.isEmpty()) {
             System.out.println("(No items to display)");
             return;
         }
@@ -63,14 +99,13 @@ public class TableRenderer {
         printRow(headers, widths);
         printBorder(widths);
 
-        if(rows.isEmpty()){
-            List<String> emptyMessage = new ArrayList<>();
-            emptyMessage.add("(No Records Found)");
-
-            for (int i = 1; i < headers.size(); i++){
-                emptyMessage.add("");
+        if (rows.isEmpty()) {
+            List<String> emptyRow = new ArrayList<>();
+            emptyRow.add(emptyMessage);
+            for (int i = 1; i < headers.size(); i++) {
+                emptyRow.add("");
             }
-            printRow(emptyMessage, widths);
+            printRow(emptyRow, widths);
             printBorder(widths);
             return;
         }
@@ -85,98 +120,71 @@ public class TableRenderer {
         }
 
         printBorder(widths);
-        System.out.println("Page " + page + " of " + totalPages);
-
+        if (totalPages > 1) {
+            System.out.println("Page " + page + " of " + totalPages);
+        }
     }
 
     private void printOuterBorder(int[] widths) {
         int borderWidth = 1;
-
         for (int width : widths) {
             borderWidth += width + 3;
+        }
+        System.out.println("+" + "-".repeat(Math.max(1, borderWidth - 2)) + "+");
     }
 
-        System.out.println("+" + "-".repeat(borderWidth - 2) + "+");
+    private void printBorder(int[] widths) {
+        StringBuilder sb = new StringBuilder("+");
+        for (int width : widths) {
+            sb.append("-".repeat(width + 2)).append("+");
+        }
+        System.out.println(sb);
+    }
+
+    private void printTitle(String title, int[] widths) {
+        int totalWidth = 1;
+        for (int width : widths) {
+            totalWidth += width + 3;
+        }
+        int innerWidth = totalWidth - 2;
+
+        if (title.length() > innerWidth) {
+            title = title.substring(0, Math.max(0, innerWidth - 3)) + "...";
+        }
+
+        int padding = (innerWidth - title.length()) / 2;
+        StringBuilder sb = new StringBuilder("|");
+        sb.append(" ".repeat(Math.max(0, padding)));
+        sb.append(title);
+        while (sb.length() < totalWidth - 1) {
+            sb.append(" ");
+        }
+        sb.append("|");
+        System.out.println(sb);
+    }
+
+    private void printRow(List<String> values, int[] widths) {
+        StringBuilder sb = new StringBuilder("|");
+        for (int i = 0; i < widths.length; i++) {
+            String val = (i < values.size() && values.get(i) != null) ? values.get(i) : "";
+            sb.append(String.format(" %-" + widths[i] + "s |", val));
+        }
+        System.out.println(sb);
     }
 
     private int[] calculateColumnWidths() {
         int[] widths = new int[headers.size()];
-
-        for (int column = 0; column < headers.size(); column++) {
-            widths[column] = display(headers.get(column)).length();
+        for (int i = 0; i < headers.size(); i++) {
+            widths[i] = headers.get(i).length();
         }
 
         for (List<String> row : rows) {
-            for (int column = 0; column < row.size(); column++) {
-                widths[column] = Math.max(widths[column], display(row.get(column)).length());
+            for (int i = 0; i < Math.min(row.size(), headers.size()); i++) {
+                if (row.get(i) != null && row.get(i).length() > widths[i]) {
+                    widths[i] = row.get(i).length();
+                }
             }
         }
-
-        if (rows.isEmpty() && widths.length > 0) {
-            widths[0] = Math.max(widths[0], "(No Records Found)".length());
-        }
-
-        if (title != null && !title.isEmpty()) {
-            int tableTextWidth = 0;
-
-            for (int width : widths) {
-                tableTextWidth += width + 3;
-            }
-            tableTextWidth--; 
-
-            if (title.length() > tableTextWidth) {
-                widths[widths.length - 1] += title.length() - tableTextWidth;
-            }
-        }
-
         return widths;
     }
-
-
-    private void printBorder(int[] widths) {
-        StringBuilder line = new StringBuilder("+");
-
-        for (int width : widths) {
-            line.append("-".repeat(width + 2)).append("+");
-        }
-
-        System.out.println(line);
-    }
-
-    private void printRow(List<String> values, int[] widths) {
-        StringBuilder line = new StringBuilder("|");
-
-        for (int column = 0; column < widths.length; column++) {
-            String value = display(values.get(column));
-            line.append(" ").append(value);
-            int pad = Math.max(0, widths[column] - value.length());
-            line.append(" ".repeat(pad));
-            line.append(" |");
-        }
-
-        System.out.println(line);
-    }
-
-    private void printTitle(String title, int[] widths) {
-        int tableWidth = 1;
-
-        for (int width : widths) {
-            tableWidth += width + 3;
-        }
-
-        int padding = Math.max(0, tableWidth - 2 - title.length());
-        int leftPadding = padding / 2;
-        int rightPadding = padding - leftPadding;
-
-        System.out.println("|"
-            + " ".repeat(leftPadding)
-            + title
-            + " ".repeat(rightPadding)
-            + "|");
-    }
-
-    private String display(String value) {
-        return value == null ? "" : value;
-    }
-
 }

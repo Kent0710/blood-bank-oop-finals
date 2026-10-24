@@ -5,7 +5,7 @@
  */
 public class UrgentDistributionStrategy implements DistributionStrategy {
 
-    private static final String DISTRIBUTION_MODE = "Immediate Urgent Emergency Courier";
+    private static final String DISTRIBUTION_MODE = "Priority Emergency Cold-Chain Transit (Front-of-Queue Dispatch)";
 
     @Override
     public void dispatch(BloodRequest request) {
@@ -28,5 +28,25 @@ public class UrgentDistributionStrategy implements DistributionStrategy {
     @Override
     public String getDistributionMode() {
         return DISTRIBUTION_MODE;
+    }
+
+    @Override
+    public String getModeName() {
+        return DISTRIBUTION_MODE;
+    }
+
+    @Override
+    public void prepareForDispatch(BloodRequest request, BloodUnit unit) {
+        System.out.println(">> [Distribution Strategy - URGENT] IMMEDIATE EMERGENCY HANDOFF: Priority packaging for unit DIN " +
+                (unit != null ? unit.getDin() : "N/A") + " (" + (unit != null && unit.getComponent() != null ? unit.getComponent().getDisplayName() : "Blood") +
+                ") with active telemetry monitoring.");
+        System.out.println(">> [Distribution Strategy - URGENT] Priority courier assigned with expedited direct transit route to " +
+                (request != null ? request.getHospitalName() : "Hospital") + " ahead of standard queue.");
+    }
+
+    @Override
+    public void executeDelivery(BloodRequest request, BloodUnit unit) {
+        System.out.println(">> [Distribution Strategy - URGENT] Priority delivery completed! Unit delivered immediately to emergency clinical team at " +
+                (request != null ? request.getHospitalName() : "Hospital") + ".");
     }
 }

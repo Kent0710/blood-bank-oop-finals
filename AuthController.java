@@ -3,8 +3,7 @@ import java.util.NoSuchElementException;
 import java.util.Scanner;
 
 /**
- * AuthController coordinates system entry, user authentication,
- * self-service public registration for patients, and role dashboard routing.
+ * Controller managing Authentication, Public Account Registration, and Role Session Routing.
  */
 public class AuthController {
 
@@ -46,7 +45,7 @@ public class AuthController {
                         handleCreateAccount(sc);
                         break;
                     case 3:
-                        System.out.println("\nThank you for using the Central Blood Bank System. Goodbye!");
+                        System.out.println("\nThank you for using Blood Bank Management System. Goodbye!");
                         isRunning = false;
                         break;
                 }
@@ -65,7 +64,7 @@ public class AuthController {
      * rejects archived/disabled accounts, and routes to the user's role dashboard.
      */
     public static void handleLogin(Scanner sc) {
-        System.out.println("\n>>> SIGN IN");
+        System.out.println("\n--- Sign In ---");
         UserService userService = UserService.getInstance();
 
         if (userService.isEmpty()) {
@@ -74,18 +73,21 @@ public class AuthController {
             return;
         }
 
-        String accountId = InputValidator.readValidAccountId(sc, "Account ID: ");
-        String password = InputValidator.readValidPassword(sc, "Password: ");
+        String accountId = InputValidator.readValidAccountId(sc, "Enter Account ID (e.g. BB-1001, HA-2001): ");
+        String password = InputValidator.readValidPassword(sc, "Enter Password: ");
 
         try {
             User user = userService.authenticate(accountId, password);
 
             if (user.isArchived() || !user.isActive()) {
-                System.out.println("  [Access Denied] Account '" + accountId + "' is disabled/archived. Access denied.");
+                System.out.println("  [Access Denied] This account has been deactivated/archived. Please contact the Super Admin.");
                 return;
             }
 
-            System.out.println("[SUCCESS] Welcome back, " + user.getName() + " (" + user.getRole() + ")!");
+            System.out.println("\n✓ Authentication successful!");
+            System.out.println("User: " + user.getName() + " | Account ID: " + user.getAccountId() + " | Role: " + user.getRole());
+            System.out.println("Privileges: " + user.getRoleDescription());
+
             routeToRoleDashboard(sc, user);
         } catch (UserNotFoundException | AuthenticationException e) {
             System.out.println("  [Authentication Error] " + e.getMessage());

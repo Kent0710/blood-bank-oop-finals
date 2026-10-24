@@ -32,6 +32,22 @@ public class Patient extends User {
 
     @Override
     public String getRoleDescription() {
-        return "Patient";
+        return "Patient (Read-Focused Access): Views personal blood profile, compatibility matrix, and tracks status of blood requests filed by hospital.";
+    }
+
+    public void displayBloodProfile() {
+        String receiveList = (patientBloodType != null) ? String.join(", ", patientBloodType.getCompatibleDonors()) : "N/A";
+        String donateList = (patientBloodType != null) ? String.join(", ", patientBloodType.getCompatibleRecipients()) : "N/A";
+
+        System.out.println("\n+-----------------------------------------------------------------------------------+");
+        System.out.println("|                                PATIENT BLOOD PROFILE                              |");
+        System.out.println("+-------------------+---------------------------------------------------------------+");
+        System.out.printf("| %-17s | %-61s |\n", "Patient Account ID", getAccountId());
+        System.out.printf("| %-17s | %-61s |\n", "Patient Name", getName());
+        System.out.printf("| %-17s | %-61s |\n", "Account Status", isActive() ? "Active" : "Archived");
+        System.out.printf("| %-17s | %-61s |\n", "Blood Type", patientBloodType != null ? patientBloodType.getLabel() : "N/A");
+        System.out.printf("| %-17s | %-61s |\n", "Can Receive From", receiveList);
+        System.out.printf("| %-17s | %-61s |\n", "Can Donate To", donateList);
+        System.out.println("+-------------------+---------------------------------------------------------------+");
     }
 }

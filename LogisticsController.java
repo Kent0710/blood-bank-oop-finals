@@ -1,150 +1,85 @@
-import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Scanner;
 
-/** Console dashboard for scheduled and emergency blood transport. */
+/**
+ * Controller managing Logistics operations, dispatches, and cold-chain intake transport.
+ */
 public class LogisticsController {
-    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+    private final LogisticsService logisticsService;
+    private final CentralInventory centralInventory;
 
-    public LogisticsController() { }
-
-    /** Compatibility entry point used by AuthController's role router. */
-    public static void handleLogisticsMenu(Scanner sc, LogisticsManager user) {
-        showDashboard(sc, user);
+    public LogisticsController() {
+        this.logisticsService = LogisticsService.getInstance();
+        this.centralInventory = CentralInventory.getInstance();
     }
 
-    /** Compatibility overload retained for callers that pass the inspection service. */
-    public static void handleLogisticsMenu(Scanner sc, LogisticsManager user, InspectionService inspectionService) {
-        showDashboard(sc, user);
+    public static void handleLogisticsMenu(Scanner scanner, LogisticsManager logisticsUser) {
+        new LogisticsController().handleLogisticsMenu(scanner, logisticsUser, InspectionService.getInstance());
     }
 
-    public static void showDashboard(Scanner sc, LogisticsManager logisticsUser) {
-        if (sc == null) sc = new Scanner(System.in);
-        if (logisticsUser == null) {
-            System.out.println("[Access Denied] A valid Logistics account is required.");
-            return;
-        }
-        runDashboard(sc);
+    public static void showDashboard(Scanner scanner, LogisticsManager logisticsUser) {
+        new LogisticsController().handleLogisticsMenu(scanner, logisticsUser, InspectionService.getInstance());
     }
 
-    /** Trusted entry point for Super Admin option [11]. */
-    public static void showAdminDashboard(Scanner sc) {
-        runDashboard(sc == null ? new Scanner(System.in) : sc);
+    public static void showAdminDashboard(Scanner scanner) {
+        LogisticsService.getInstance().displayQueues();
     }
 
-    private static void runDashboard(Scanner sc) {
-        boolean running = true;
-        while (running) {
+    public void handleLogisticsMenu(Scanner scanner, LogisticsManager logisticsUser, InspectionService inspectionService) {
+        if (scanner == null) scanner = new Scanner(System.in);
+        String name = (logisticsUser != null && logisticsUser.getName() != null) ? logisticsUser.getName() : "Logistics Dispatcher";
+        String id = (logisticsUser != null && logisticsUser.getAccountId() != null) ? logisticsUser.getAccountId() : "LG-3001";
+
+        Runnable printLogisticsMenu = () -> {
+            System.out.println("+-----------------------------------------------------------------------------------+");
+            System.out.printf("| %-81s |\n", "LOGISTICS DISPATCH HUB: " + truncate(name + " [ID: " + id + "]", 56));
+            System.out.println("+-----------------------------------------------------------------------------------+");
+            System.out.println("| [1] Process Scheduled Distribution (Blood Bank -> Hospital)                       |");
+            System.out.println("| [2] Process Urgent Distribution (Blood Bank -> Hospital - Priority Queue)         |");
+            System.out.println("| [3] Collection / Intake Transport (Hospital or Org -> Blood Bank)                 |");
+            System.out.println("| [4] View Logistics Queues & Transport Records (Read)                              |");
+            System.out.println("| [5] Log out                                                                       |");
+            System.out.println("+-----------------------------------------------------------------------------------+");
+        };
+
+        boolean inLogisticsMenu = true;
+        while (inLogisticsMenu) {
             try {
-                printMenu();
-                int choice = InputValidator.readInt(sc, "Enter choice (1-5): ", 1, 5, LogisticsController::printMenu);
+                System.out.println();
+                printLogisticsMenu.run();
+
+                int choice = InputValidator.readInteger(scanner, "Enter choice (1-5): ", 1, 5, printLogisticsMenu);
+
                 switch (choice) {
-                    case 1: viewScheduledQueue(); break;
-                    case 2: viewUrgentQueue(); break;
-                    case 3: dispatchRequisition(sc); break;
-                    case 4: viewTransportAuditTrail(); break;
-                    case 5:
-                        System.out.println("[LOGOUT] Logistics session ended. Returning to previous menu...");
-                        running = false;
+                    case 1:
+                        logisticsService.processScheduledDistribution(centralInventory);
                         break;
-                    default: break;
+                    case 2:
+                        logisticsService.processUrgentDistribution(centralInventory);
+                        break;
+                    case 3:
+                        PipelineHelper.executeFullProcessingPipeline(scanner, "External Intake", centralInventory, inspectionService, logisticsService);
+                        break;
+                    case 4:
+                        logisticsService.displayQueues();
+                        break;
+                    case 5:
+                        System.out.println("Logging out from Logistics...");
+                        inLogisticsMenu = false;
+                        break;
                 }
             } catch (NoSuchElementException e) {
-                running = false;
+                break;
             } catch (Exception e) {
-                System.out.println("[Logistics Notice] Unable to complete that action: " + safeMessage(e));
+                System.out.println("\n  [Logistics Notice] An unexpected error occurred: " + e.getMessage());
+                System.out.println("  Returning to logistics hub menu...");
             }
         }
     }
 
-    private static void printMenu() {
-        System.out.println("+-----------------------------------------------------------------------------------+");
-        System.out.println("| LOGISTICS & DISTRIBUTION DASHBOARD                                                |");
-        System.out.println("+-----------------------------------------------------------------------------------+");
-        System.out.println("| [1] View Scheduled Transport Queue (Standard 48h Deliveries)                      |");
-        System.out.println("| [2] View Urgent Emergency Dispatch Queue (Immediate Priority)                     |");
-        System.out.println("| [3] Dispatch Requisition (Update Delivery Status)                                 |");
-        System.out.println("| [4] View Transport Audit Trail                                                    |");
-        System.out.println("| [5] Log out                                                                       |");
-        System.out.println("+-----------------------------------------------------------------------------------+");
+    private static String truncate(String text, int maxLen) {
+        if (text == null) return "";
+        if (text.length() <= maxLen) return text;
+        return text.substring(0, maxLen - 3) + "...";
     }
-
-    private static void viewScheduledQueue() {
-        List<BloodRequest> eligible = approved(LogisticsService.getInstance().getScheduledQueue());
-        renderQueue("SCHEDULED TRANSPORT QUEUE - STANDARD 48H DELIVERIES", eligible);
-    }
-
-    private static void viewUrgentQueue() {
-        List<BloodRequest> eligible = approved(LogisticsService.getInstance().getUrgentQueue());
-        renderQueue("URGENT EMERGENCY DISPATCH QUEUE - IMMEDIATE PRIORITY", eligible);
-    }
-
-    private static List<BloodRequest> approved(List<BloodRequest> requests) {
-        List<BloodRequest> eligible = new ArrayList<>();
-        if (requests != null) {
-            for (BloodRequest request : requests) {
-                if (request != null && request.getStatus() == RequisitionStatus.APPROVED) eligible.add(request);
-            }
-        }
-        return eligible;
-    }
-
-    private static void renderQueue(String title, List<BloodRequest> requests) {
-        TableRenderer table = new TableRenderer().withTitle(title)
-                .addHeaders("Req ID", "Hospital", "Patient", "Blood Type", "Priority", "Target", "Status");
-        for (BloodRequest r : requests) {
-            table.addRow(value(r.getRequestId()), value(r.getHospitalName()), value(r.getPatientName()),
-                    r.getBloodType() == null ? "N/A" : r.getBloodType().getCode(),
-                    r.getPriority() == null ? "N/A" : r.getPriority().name(),
-                    r.getTargetTime() == null ? "N/A" : r.getTargetTime().format(TIME_FORMAT),
-                    r.getStatus() == null ? "UNKNOWN" : r.getStatus().name());
-        }
-        if (requests.isEmpty()) System.out.println("No approved requisitions are waiting in this queue.");
-        table.render();
-    }
-
-    private static void dispatchRequisition(Scanner sc) {
-        System.out.println("\n>>> DISPATCH APPROVED REQUISITION");
-        String reqId = InputValidator.readNonBlankString(sc, "Enter requisition ID (or 0 to cancel): ", null).trim();
-        if ("0".equals(reqId)) {
-            System.out.println("[Action Cancelled] No requisition dispatched.");
-            return;
-        }
-        BloodRequest request = InspectionService.getInstance().getRequisitionById(reqId);
-        if (request == null) {
-            System.out.println("[Validation Error] No requisition found with ID '" + reqId + "'.");
-            return;
-        }
-        if (request.getStatus() != RequisitionStatus.APPROVED) {
-            System.out.println("[Validation Error] Only APPROVED requisitions can be dispatched. Current status: "
-                    + (request.getStatus() == null ? "UNKNOWN" : request.getStatus().name()) + ".");
-            return;
-        }
-
-        // Record the departure state before the service completes delivery and audit logging.
-        request.setStatus(RequisitionStatus.IN_TRANSIT);
-        LogisticsService.getInstance().dispatchUnit(request.getRequestId());
-        if (request.getStatus() == RequisitionStatus.DELIVERED) {
-            System.out.println("[SUCCESS] " + request.getRequestId() + " completed: APPROVED -> IN_TRANSIT -> DELIVERED.");
-        } else {
-            // Keep failed dispatches eligible for review instead of leaving a false in-transit state.
-            request.setStatus(RequisitionStatus.APPROVED);
-            System.out.println("[Dispatch Error] Delivery did not complete; requisition remains APPROVED.");
-        }
-    }
-
-    private static void viewTransportAuditTrail() {
-        List<String> entries = LogisticsService.getInstance().getTransportLog();
-        System.out.println("\n>>> TRANSPORT AUDIT TRAIL");
-        if (entries == null || entries.isEmpty()) {
-            System.out.println("No completed transport events have been recorded.");
-            return;
-        }
-        for (int i = 0; i < entries.size(); i++) System.out.println((i + 1) + ". " + entries.get(i));
-    }
-
-    private static String value(String s) { return s == null || s.trim().isEmpty() ? "N/A" : s.trim(); }
-    private static String safeMessage(Exception e) { return e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage(); }
 }

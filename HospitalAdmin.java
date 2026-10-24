@@ -7,12 +7,20 @@ public class HospitalAdmin extends User {
         super(id, fullName, Roles.HOSPITAL_ADMIN, hospitalAffiliation, password);
     }
 
+    public String getHospitalName() {
+        return getHospitalAffiliation();
+    }
+
+    public void setHospitalName(String hospitalName) {
+        setHospitalAffiliation(hospitalName);
+    }
+
     public void setHospitalAffiliation(String hospitalAffiliation) {
         this.hospitalAffiliation = hospitalAffiliation != null ? hospitalAffiliation : "N/A";
     }
 
     @Override
     public String getRoleDescription() {
-        return "Hospital Admin";
+        return "Sub Admin: Requests blood on behalf of hospital patients, registers patients, returns excess blood to Blood Bank.";
     }
 }

@@ -5,6 +5,6 @@ public class BloodBank extends User {
 
     @Override
     public String getRoleDescription() {
-        return "Super Admin";
+        return "Super Admin: Owns central inventory, approves/rejects units & requests, sets thresholds, manages employee accounts.";
     }
 }

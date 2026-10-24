@@ -1,3 +1,4 @@
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -5,7 +6,7 @@ import java.util.List;
 
 /**
  * InspectionService: Thread-safe Singleton managing hospital and patient blood requisitions,
- * central requisition storage, and 48-hour auto-escalation rules.
+ * laboratory testing, component centrifugation, DIN scanning, and quality validation workflows.
  */
 public class InspectionService {
     private static InspectionService instance;
@@ -117,5 +118,94 @@ public class InspectionService {
 
     public synchronized void clear() {
         requisitions.clear();
+    }
+
+    /**
+     * Stage 2: MLS Laboratory Testing
+     */
+    public boolean performMLSInspection(BloodUnit unit) {
+        System.out.println("\n--- [Processing Pipeline: Stage 2 - MLS Laboratory Testing] ---");
+        System.out.println(">> [MLS] Inspecting unit DIN: " + unit.getDin() + " | Type: " + (unit.getBloodType() != null ? unit.getBloodType().getLabel() : "N/A"));
+        unit.setStatus(UnitStatus.IN_TESTING);
+
+        boolean passed = true;
+        StringBuilder report = new StringBuilder();
+
+        // Contamination test
+        if (unit.isContaminated()) {
+            report.append("FAIL: Serological/bacterial contamination detected; ");
+            passed = false;
+        } else {
+            report.append("PASS: Serological markers non-reactive (No contamination); ");
+        }
+
+        // Temperature test
+        if (unit.getTemperatureCelsius() < 1.0 || unit.getTemperatureCelsius() > 6.0) {
+            report.append(String.format("FAIL: Temperature out of cold chain limits (%.1f°C, allowed 1.0°C-6.0°C); ", unit.getTemperatureCelsius()));
+            passed = false;
+        } else {
+            report.append(String.format("PASS: Cold chain temperature compliant (%.1f°C); ", unit.getTemperatureCelsius()));
+        }
+
+        // Lifespan test
+        LocalDate today = LocalDate.now();
+        if (unit.isExpiredOn(today)) {
+            report.append("FAIL: Unit expired; ");
+            passed = false;
+        } else {
+            long remaining = unit.getRemainingDays(today);
+            report.append("PASS: Viable lifespan (").append(remaining).append(" days remaining); ");
+        }
+
+        unit.setMlsInspected(true);
+        unit.setMlsPassed(passed);
+        unit.setInspectionNotes(report.toString());
+
+        System.out.println(">> [MLS Result]: " + (passed ? "PASSED (Quality verified)" : "FAILED (Quality violations detected)"));
+        System.out.println("   Report: " + report);
+
+        return passed;
+    }
+
+    /**
+     * Stage 3: Centrifugation & Separation
+     */
+    public void processAndSeparateComponent(BloodUnit unit, BloodComponent chosenComponent) {
+        System.out.println("\n--- [Processing Pipeline: Stage 3 - Centrifugation & Separation] ---");
+        System.out.println(">> [Laboratory] Centrifuging raw unit DIN: " + unit.getDin());
+        System.out.println(">> [Laboratory] Separated into component: " + (chosenComponent != null ? chosenComponent.getDisplayName() : "Whole Blood"));
+        unit.setComponent(chosenComponent);
+        if (chosenComponent != null) {
+            unit.setLifespanDays(chosenComponent.getStandardLifespanDays());
+            System.out.println(">> [Laboratory] Calibrated lifespan: " + chosenComponent.getStandardLifespanDays() + " days (Expiry: " + unit.getExpiryDate() + ").");
+        }
+    }
+
+    /**
+     * Stage 4: Barcode / DIN Scanning
+     */
+    public void scanAndLogUnit(BloodUnit unit) {
+        System.out.println("\n--- [Processing Pipeline: Stage 4 - Scientist Barcode / DIN Scanning] ---");
+        System.out.println(">> [Scientist] Optical scanner active. Scanning DIN: " + unit.getDin());
+        System.out.println(">> [Scientist] Unit metadata and MLS test results logged into quarantine inventory.");
+        unit.setScientistLogged(true);
+    }
+
+    /**
+     * Stage 5: Super Admin Decision
+     */
+    public boolean reviewAndDecide(BloodUnit unit, boolean adminDecision, CentralInventory inventory) {
+        System.out.println("\n--- [Processing Pipeline: Stage 5 - Super Admin Storage Approval] ---");
+        if (adminDecision && unit.isMlsPassed()) {
+            unit.setAdminApproved(true);
+            inventory.addUnit(unit);
+            System.out.println(">> [Super Admin] APPROVED: Unit " + unit.getDin() + " successfully placed into active Central Inventory.");
+            return true;
+        } else {
+            unit.setAdminApproved(false);
+            unit.setStatus(UnitStatus.REJECTED);
+            System.out.println(">> [Super Admin] REJECTED: Unit " + unit.getDin() + " rejected (MLS Passed: " + unit.isMlsPassed() + "). Tagged for disposal.");
+            return false;
+        }
     }
 }

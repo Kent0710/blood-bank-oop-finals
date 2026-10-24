@@ -5,7 +5,7 @@
  */
 public class ScheduledDistributionStrategy implements DistributionStrategy {
 
-    private static final String DISTRIBUTION_MODE = "Scheduled Regular Transport";
+    private static final String DISTRIBUTION_MODE = "Standard Scheduled Cold-Chain Transit";
 
     @Override
     public void dispatch(BloodRequest request) {
@@ -28,5 +28,25 @@ public class ScheduledDistributionStrategy implements DistributionStrategy {
     @Override
     public String getDistributionMode() {
         return DISTRIBUTION_MODE;
+    }
+
+    @Override
+    public String getModeName() {
+        return DISTRIBUTION_MODE;
+    }
+
+    @Override
+    public void prepareForDispatch(BloodRequest request, BloodUnit unit) {
+        System.out.println(">> [Distribution Strategy - Scheduled] Packing unit DIN " + (unit != null ? unit.getDin() : "N/A") +
+                " (" + (unit != null && unit.getComponent() != null ? unit.getComponent().getDisplayName() : "Blood") +
+                ") into standard temperature-controlled cold-chain container (2°C - 6°C)...");
+        System.out.println(">> [Distribution Strategy - Scheduled] Assigned standard delivery route to " +
+                (request != null ? request.getHospitalName() : "Hospital") + ".");
+    }
+
+    @Override
+    public void executeDelivery(BloodRequest request, BloodUnit unit) {
+        System.out.println(">> [Distribution Strategy - Scheduled] Transport completed. Verified arrival at " +
+                (request != null ? request.getHospitalName() : "Hospital") + " for scheduled transfusion.");
     }
 }

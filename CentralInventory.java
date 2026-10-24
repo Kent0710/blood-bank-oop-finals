@@ -1,6 +1,7 @@
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -71,7 +72,9 @@ public class CentralInventory {
                 quarantineUnits.add(unit);
             }
             activeUnits.remove(unit);
-        } else if (unit.getStatus() == UnitStatus.QUARANTINED || unit.getStatus() == UnitStatus.EXPIRED || unit.getStatus() == UnitStatus.PURGED) {
+        } else if (unit.getStatus() == UnitStatus.QUARANTINED || unit.getStatus() == UnitStatus.EXPIRED ||
+                   unit.getStatus() == UnitStatus.PURGED || unit.getStatus() == UnitStatus.ARCHIVED_EXPIRED ||
+                   unit.getStatus() == UnitStatus.ARCHIVED_CONTAMINATED || unit.getStatus() == UnitStatus.REJECTED) {
             if (!quarantineUnits.contains(unit)) {
                 quarantineUnits.add(unit);
             }
@@ -82,6 +85,90 @@ public class CentralInventory {
                 activeUnits.add(unit);
             }
         }
+    }
+
+    public synchronized boolean removeUnit(BloodUnit unit) {
+        return activeUnits.remove(unit);
+    }
+
+    public synchronized List<BloodUnit> getActiveStock() {
+        return new ArrayList<>(activeUnits);
+    }
+
+    public synchronized List<BloodUnit> getArchivedUnits() {
+        return new ArrayList<>(quarantineUnits);
+    }
+
+    /**
+     * Checks availability of compatible non-expired blood.
+     */
+    public synchronized boolean isBloodAvailable(BloodType requestedType, LocalDate targetDate) {
+        LocalDate checkDate = targetDate != null ? targetDate : LocalDate.now();
+        return activeUnits.stream().anyMatch(unit ->
+                (unit.getStatus() == UnitStatus.STORED || unit.getStatus() == UnitStatus.ACTIVE) &&
+                !unit.isExpiredOn(checkDate) &&
+                !unit.isContaminated() &&
+                BloodType.isCompatible(unit.getBloodType(), requestedType)
+        );
+    }
+
+    /**
+     * Allocates compatible blood unit using the configured AllocationStrategy (FIFO/FEFO).
+     * Throws InsufficientStockException if no compatible unit is available.
+     */
+    public synchronized BloodUnit allocateBlood(BloodType requestedType, LocalDate targetDate)
+            throws InsufficientStockException {
+        BloodUnit selected = allocationStrategy.selectUnit(activeUnits, requestedType, targetDate);
+        if (selected != null) {
+            selected.setStatus(UnitStatus.IN_TRANSIT);
+            activeUnits.remove(selected);
+        }
+        return selected;
+    }
+
+    /**
+     * Archives a unit so it is removed from active stock.
+     */
+    public synchronized boolean archiveUnit(String din, UnitStatus reason) {
+        BloodUnit found = null;
+        for (BloodUnit u : activeUnits) {
+            if (u.getDin() != null && u.getDin().equalsIgnoreCase(din)) {
+                found = u;
+                break;
+            }
+        }
+        if (found != null) {
+            activeUnits.remove(found);
+            found.setStatus(reason);
+            quarantineUnits.add(found);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Audits and archives expired or contaminated units.
+     */
+    public synchronized List<BloodUnit> auditAndPurgeInvalidStock() {
+        List<BloodUnit> invalid = new ArrayList<>();
+        Iterator<BloodUnit> iterator = activeUnits.iterator();
+        LocalDate today = LocalDate.now();
+
+        while (iterator.hasNext()) {
+            BloodUnit unit = iterator.next();
+            if (unit.isExpiredOn(today)) {
+                unit.setStatus(UnitStatus.ARCHIVED_EXPIRED);
+                invalid.add(unit);
+                quarantineUnits.add(unit);
+                iterator.remove();
+            } else if (unit.isContaminated()) {
+                unit.setStatus(UnitStatus.ARCHIVED_CONTAMINATED);
+                invalid.add(unit);
+                quarantineUnits.add(unit);
+                iterator.remove();
+            }
+        }
+        return invalid;
     }
 
     /**
@@ -184,7 +271,7 @@ public class CentralInventory {
         }
 
         for (BloodUnit unit : activeUnits) {
-            if (unit != null && unit.getStatus() == UnitStatus.ACTIVE && unit.getBloodType() != null) {
+            if (unit != null && (unit.getStatus() == UnitStatus.ACTIVE || unit.getStatus() == UnitStatus.STORED) && unit.getBloodType() != null) {
                 counts.put(unit.getBloodType(), counts.get(unit.getBloodType()) + 1L);
             }
         }
@@ -235,6 +322,86 @@ public class CentralInventory {
         System.out.println("================================================================================");
     }
 
+    public synchronized void checkLowInventoryWarnings() {
+        Map<BloodType, Long> counts = getStockCounts();
+        List<String> warnings = new ArrayList<>();
+
+        for (Map.Entry<BloodType, Long> entry : counts.entrySet()) {
+            if (entry.getValue() <= lowStockThreshold) {
+                warnings.add(String.format("|  * %-4s : %2d unit(s) remaining (THRESHOLD: <= %d) - Replenishment Recommended!      |",
+                        entry.getKey().getLabel(), entry.getValue(), lowStockThreshold));
+            }
+        }
+
+        System.out.println("+-------------------------------------------------------------------------------------------------------------------------------+");
+        System.out.println("|                                                CENTRAL INVENTORY SUPPLY ALERTS                                                |");
+        System.out.println("+-------------------------------------------------------------------------------------------------------------------------------+");
+        if (warnings.isEmpty()) {
+            System.out.println("|  ✓ All blood type reserves are healthy (Above minimum alert threshold).                                                       |");
+        } else {
+            System.out.println("|  ! ATTENTION: Low stock alerts detected:                                                                                      |");
+            for (String w : warnings) {
+                System.out.println(w);
+            }
+        }
+        System.out.println("+-------------------------------------------------------------------------------------------------------------------------------+");
+    }
+
+    public synchronized void displayInventory() {
+        System.out.println("\n+-------------------------------------------------------------------------------------------------------------------------------+");
+        System.out.println("|                                               CENTRAL BLOOD BANK ACTIVE INVENTORY                                             |");
+        System.out.println("+--------------+--------+-------------------------------------+--------------------------------+--------------+--------------+---------+");
+        System.out.printf("| %-12s | %-6s | %-35s | %-30s | %-12s | %-12s | %-7s |\n",
+                "DIN", "Type", "Component", "Source", "Collected", "Expires", "Temp");
+        System.out.println("+--------------+--------+-------------------------------------+--------------------------------+--------------+--------------+---------+");
+
+        if (activeUnits.isEmpty()) {
+            System.out.printf("| %-125s |\n", "Central active inventory is currently empty.");
+        } else {
+            for (BloodUnit unit : activeUnits) {
+                System.out.printf("| %-12s | %-6s | %-35s | %-30s | %-12s | %-12s | %5.1f°C |\n",
+                        truncate(unit.getDin(), 12),
+                        unit.getBloodType() != null ? unit.getBloodType().getLabel() : "N/A",
+                        truncate(unit.getComponent() != null ? unit.getComponent().getDisplayName() : "N/A", 35),
+                        truncate(unit.getSource() != null ? unit.getSource() : "N/A", 30),
+                        unit.getCollectionDate(),
+                        unit.getExpiryDate(),
+                        unit.getTemperatureCelsius());
+            }
+        }
+        System.out.println("+--------------+--------+-------------------------------------+--------------------------------+--------------+--------------+---------+");
+        System.out.printf("| Total Active Units in Stock: %-95d |\n", activeUnits.size());
+        System.out.println("+-------------------------------------------------------------------------------------------------------------------------------+");
+
+        checkLowInventoryWarnings();
+    }
+
+    public synchronized void displayArchivedUnits() {
+        System.out.println("\n+-------------------------------------------------------------------------------------------------------------------------------+");
+        System.out.println("|                                                 ARCHIVED & UNAVAILABLE UNITS                                                  |");
+        System.out.println("+--------------+--------+-------------------------------------+--------------------------------+--------------+-----------------+");
+        System.out.printf("| %-12s | %-6s | %-35s | %-30s | %-12s | %-15s |\n",
+                "DIN", "Type", "Component", "Reason / Status", "Expires", "Archived Date");
+        System.out.println("+--------------+--------+-------------------------------------+--------------------------------+--------------+-----------------+");
+
+        if (quarantineUnits.isEmpty()) {
+            System.out.printf("| %-125s |\n", "No archived units on record.");
+        } else {
+            for (BloodUnit unit : quarantineUnits) {
+                System.out.printf("| %-12s | %-6s | %-35s | %-30s | %-12s | %-15s |\n",
+                        truncate(unit.getDin(), 12),
+                        unit.getBloodType() != null ? unit.getBloodType().getLabel() : "N/A",
+                        truncate(unit.getComponent() != null ? unit.getComponent().getDisplayName() : "N/A", 35),
+                        truncate(unit.getStatus() != null ? unit.getStatus().getDescription() : "N/A", 30),
+                        unit.getExpiryDate(),
+                        LocalDate.now());
+            }
+        }
+        System.out.println("+--------------+--------+-------------------------------------+--------------------------------+--------------+-----------------+");
+        System.out.printf("| Total Archived Units: %-101d |\n", quarantineUnits.size());
+        System.out.println("+-------------------------------------------------------------------------------------------------------------------------------+");
+    }
+
     // Dynamic Strategy & Configuration Accessors
 
     public synchronized void setAllocationStrategy(AllocationStrategy strategy) {
@@ -272,5 +439,11 @@ public class CentralInventory {
         System.out.printf("  Expired Units Detected : %d units%n", expired);
         System.out.printf("  Action Taken           : Moved %d units to QUARANTINED stock (Status: EXPIRED)%n", expired);
         System.out.println("================================================================================");
+    }
+
+    private static String truncate(String text, int maxLen) {
+        if (text == null) return "";
+        if (text.length() <= maxLen) return text;
+        return text.substring(0, maxLen - 3) + "...";
     }
 }

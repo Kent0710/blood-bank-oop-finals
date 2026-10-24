@@ -1,83 +1,85 @@
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Scanner;
 
 /**
- * HospitalAdminController coordinates clinical operations and dashboard workflows
- * for authenticated Hospital Administrators.
+ * Controller managing Hospital Admin operations: blood requisitioning with lead-time checks,
+ * donor intake, cold-chain returns, and clinical patient enrollment.
  */
 public class HospitalAdminController {
+    private final UserService userService;
+    private final CentralInventory centralInventory;
+    private final LogisticsService logisticsService;
+    private final InspectionService inspectionService;
+    private static int requestSequence = 1001;
 
     public HospitalAdminController() {
+        this.userService = UserService.getInstance();
+        this.centralInventory = CentralInventory.getInstance();
+        this.logisticsService = LogisticsService.getInstance();
+        this.inspectionService = InspectionService.getInstance();
     }
 
-    /**
-     * Runs the interactive dashboard loop for the logged-in Hospital Admin.
-     *
-     * @param sc    Active Scanner instance for reading console inputs
-     * @param admin Authenticated HospitalAdmin instance
-     */
     public static void showDashboard(Scanner sc, HospitalAdmin admin) {
-        if (sc == null) {
-            sc = new Scanner(System.in);
-        }
+        new HospitalAdminController().handleHospitalAdminMenu(sc, admin);
+    }
 
-        Runnable printDashboard = () -> {
-            String adminName = (admin != null && admin.getName() != null) ? admin.getName() : "Dr. Nicole";
-            String hospital = getAdminHospital(admin);
+    public void handleHospitalAdminMenuInstance(Scanner sc, HospitalAdmin admin) {
+        handleHospitalAdminMenu(sc, admin);
+    }
 
-            String title = String.format("HOSPITAL ADMIN DASHBOARD: %s [Hospital: %s]", adminName, hospital);
+    public void handleHospitalAdminMenu(Scanner scanner, HospitalAdmin hospitalAdmin) {
+        if (scanner == null) scanner = new Scanner(System.in);
+
+        Runnable printHospMenu = () -> {
+            String adminName = (hospitalAdmin != null && hospitalAdmin.getName() != null) ? hospitalAdmin.getName() : "Dr. Nicole";
+            String hospital = (hospitalAdmin != null && hospitalAdmin.getHospitalName() != null) ? hospitalAdmin.getHospitalName() : "General Hospital";
 
             System.out.println("+-----------------------------------------------------------------------------------+");
-            System.out.printf("| %-81s |\n", title);
+            System.out.printf("| %-81s |\n", "HOSPITAL ADMIN DASHBOARD: " + truncate(adminName + " [ID: " + hospitalAdmin.getAccountId() + "]", 54));
             System.out.println("+-----------------------------------------------------------------------------------+");
-            System.out.printf("| %-81s |\n", "[1] Submit New Blood Requisition (Request Blood from Central Bank)");
-            System.out.printf("| %-81s |\n", "[2] Track Submitted Requisitions (Live Status & Delivery Tracking)");
-            System.out.printf("| %-81s |\n", "[3] Store Collected Blood from Hospital Donors (5-Stage Clinical Pipeline)");
-            System.out.printf("| %-81s |\n", "[4] Return Unused / Temperature-Compromised Units (Cold-Chain Quarantine)");
-            System.out.printf("| %-81s |\n", "[5] Register New Patient Account (Bedside Onboarding)");
-            System.out.printf("| %-81s |\n", "[6] View Assigned Hospital Patients");
-            System.out.printf("| %-81s |\n", "[7] Log out");
+            System.out.println("| [1] Request Blood from Blood Bank (Hospital -> Blood Bank)                        |");
+            System.out.println("| [2] Store Blood Donation to Blood Bank (Complete 5-Stage Processing Pipeline)     |");
+            System.out.println("| [3] Return Unused / Excess Blood to Blood Bank (Cold-Chain Restock)               |");
+            System.out.println("| [4] View Registered Patients (Read)                                               |");
+            System.out.println("| [5] Register New Patient (Create)                                                 |");
+            System.out.println("| [6] Log out                                                                       |");
             System.out.println("+-----------------------------------------------------------------------------------+");
         };
 
-        boolean isRunning = true;
-        while (isRunning) {
+        boolean inHospMenu = true;
+        while (inHospMenu) {
             try {
                 System.out.println();
-                printDashboard.run();
-                int choice = InputValidator.readInt(sc, "Enter choice (1-7): ", 1, 7, printDashboard);
+                printHospMenu.run();
+
+                int choice = InputValidator.readInteger(scanner, "Enter choice (1-6): ", 1, 6, printHospMenu);
 
                 switch (choice) {
                     case 1:
-                        submitRequisition(sc, admin);
+                        handleHospitalRequestBlood(scanner, hospitalAdmin);
                         break;
                     case 2:
-                        trackRequisitions(admin);
+                        handleHospitalStoreDonation(scanner, hospitalAdmin);
                         break;
                     case 3:
-                        storeCollectedBlood(sc, admin);
+                        handleHospitalReturnBlood(scanner, hospitalAdmin);
                         break;
                     case 4:
-                        returnCompromisedUnits(sc, admin);
+                        displayPatients();
                         break;
                     case 5:
-                        registerBedsidePatient(sc, admin);
+                        handleRegisterPatient(scanner);
                         break;
                     case 6:
-                        viewAssignedPatients(admin);
-                        break;
-                    case 7:
-                        System.out.println("\n[LOGOUT] Hospital Admin session ended. Returning to Main Menu...");
-                        isRunning = false;
+                        System.out.println("Logging out from Hospital Admin...");
+                        inHospMenu = false;
                         break;
                 }
             } catch (NoSuchElementException e) {
-                // Input stream closed (EOF or automated test runner)
                 break;
             } catch (Exception e) {
                 System.out.println("\n  [Hospital Admin Notice] An unexpected error occurred: " + e.getMessage());
@@ -86,251 +88,196 @@ public class HospitalAdminController {
         }
     }
 
-    /**
-     * Dispatcher alias matching AuthController reflection lookup.
-     */
-    public static void handleHospitalAdminMenu(Scanner sc, HospitalAdmin admin) {
-        showDashboard(sc, admin);
-    }
+    private void handleHospitalRequestBlood(Scanner scanner, HospitalAdmin admin) {
+        System.out.println("\n--- Request Blood from Blood Bank (" + admin.getHospitalName() + " -> Blood Bank) ---");
 
-    /**
-     * Instance method dispatch alias for polymorphic controller invocations.
-     */
-    public void handleHospitalAdminMenuInstance(Scanner sc, HospitalAdmin admin) {
-        showDashboard(sc, admin);
-    }
+        List<Patient> patients = userService.getActivePatients();
+        String patientName;
+        BloodType neededType;
 
-    /**
-     * Option 1: Submit blood requisition with patient name, required ABO/Rh, target timestamp, and clinical priority.
-     */
-    private static void submitRequisition(Scanner sc, HospitalAdmin admin) {
-        System.out.println("\n>>> SUBMIT NEW BLOOD REQUISITION");
-        String hospital = getAdminHospital(admin);
+        if (!patients.isEmpty()) {
+            System.out.println("Select a patient from active clinical records or enter a new name:");
+            for (int i = 0; i < patients.size(); i++) {
+                Patient p = patients.get(i);
+                System.out.printf("[%d] %-20s (%s) | Blood Type: %s\n",
+                        i + 1, p.getName(), p.getAccountId(), (p.getBloodType() != null ? p.getBloodType().getLabel() : "N/A"));
+            }
+            System.out.println("[" + (patients.size() + 1) + "] Enter other patient name manually");
 
-        String patientName = InputValidator.readValidName(sc, "  Enter Patient Full Name: ");
-        BloodType bloodType = promptBloodType(sc);
-
-        System.out.println("\n  Select Clinical Priority Level:");
-        System.out.println("    [1] NORMAL (Scheduled Batch Delivery)");
-        System.out.println("    [2] URGENT (Immediate Emergency STAT Delivery)");
-        int prioChoice = InputValidator.readInt(sc, "  Enter priority choice (1-2): ", 1, 2, null);
-        PriorityLevel priority = (prioChoice == 2) ? PriorityLevel.URGENT : PriorityLevel.NORMAL;
-
-        LocalDateTime targetTime = InputValidator.readFutureDateTime(sc, "--- Target Delivery Date & Time Input ---", null);
-
-        BloodRequest req = InspectionService.getInstance().submitRequisition(
-                hospital, patientName, bloodType, priority, targetTime
-        );
-
-        System.out.println("\n[SUCCESS] Blood Requisition " + req.getRequestId() + " successfully filed with Central Blood Bank!");
-    }
-
-    /**
-     * Option 2: Render live status table for requisitions affiliated with the logged-in hospital.
-     */
-    private static void trackRequisitions(HospitalAdmin admin) {
-        System.out.println("\n>>> TRACK SUBMITTED REQUISITIONS");
-        String hospital = getAdminHospital(admin);
-
-        List<BloodRequest> reqList = InspectionService.getInstance().getRequisitionsByHospital(hospital);
-
-        TableRenderer table = new TableRenderer()
-                .withTitle("LIVE REQUISITIONS TRACKING - " + hospital.toUpperCase())
-                .addHeaders("Req ID", "Patient Name", "Blood Type", "Priority", "Target Delivery", "Status", "Assigned Unit");
-
-        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-        for (BloodRequest req : reqList) {
-            String reqId = req.getRequestId() != null ? req.getRequestId() : "N/A";
-            String patient = req.getPatientName() != null ? req.getPatientName() : "N/A";
-            String type = req.getBloodType() != null ? req.getBloodType().getCode() : "N/A";
-            String priority = req.getPriority() != null ? req.getPriority().name() : "NORMAL";
-            String target = req.getTargetTime() != null ? req.getTargetTime().format(dtf) : "N/A";
-            String status = req.getStatus() != null ? req.getStatus().name() : "PENDING";
-            String unit = req.getAssignedUnitId() != null ? req.getAssignedUnitId() : "NONE";
-
-            table.addRow(reqId, patient, type, priority, target, status, unit);
+            int sel = InputValidator.readInteger(scanner, "Enter choice: ", 1, patients.size() + 1);
+            if (sel <= patients.size()) {
+                Patient selected = patients.get(sel - 1);
+                patientName = selected.getName();
+                neededType = selected.getBloodType();
+                System.out.println(">> Selected patient: " + patientName + " (" + (neededType != null ? neededType.getLabel() : "N/A") + ")");
+            } else {
+                patientName = InputValidator.readValidName(scanner, "Enter Patient Name: ");
+                neededType = PipelineHelper.promptBloodType(scanner);
+            }
+        } else {
+            patientName = InputValidator.readValidName(scanner, "Enter Patient Name: ");
+            neededType = PipelineHelper.promptBloodType(scanner);
         }
 
+        LocalDateTime neededDateTime = InputValidator.readFutureDateTime(scanner);
+
+        LocalDateTime now = LocalDateTime.now();
+        Duration diff = Duration.between(now, neededDateTime);
+        boolean isUnder48Hours = diff.toHours() < 48;
+
+        BloodRequest.RequestType calculatedPriority;
+        if (isUnder48Hours) {
+            calculatedPriority = BloodRequest.RequestType.URGENT;
+            System.out.println("\n================================================================================");
+            System.out.println("  Notice: Target delivery time is within 48 hours (" + neededDateTime.format(BloodRequest.DATE_TIME_FORMATTER) + ").");
+            System.out.println("  [AUTO-ESCALATION] Priority automatically upgraded to: URGENT");
+            System.out.println("  Emergency priority automatically applied. Enqueued to Emergency Logistics Dispatch Queue.");
+            System.out.println("================================================================================");
+        } else {
+            calculatedPriority = BloodRequest.RequestType.SCHEDULED;
+            System.out.println(">> Standard delivery timeline confirmed (> 48 hours lead time). Priority: SCHEDULED.");
+        }
+
+        String reqId = "REQ-" + (requestSequence++);
+        BloodRequest request = new BloodRequest(reqId, patientName, admin.getHospitalName(), neededType, calculatedPriority, neededDateTime);
+        inspectionService.addRequisition(request);
+        logisticsService.registerRequest(request);
+
+        System.out.println("\n+-----------------------------------------------------------------------------------+");
+        System.out.println("|                          REQUISITION SUBMITTED SUCCESSFULLY                       |");
+        System.out.println("+----------------------+------------------------------------------------------------+");
+        System.out.printf("| %-20s | %-58s |\n", "Requisition ID", request.getRequestId());
+        System.out.printf("| %-20s | %-58s |\n", "Requesting Hospital", truncate(admin.getHospitalName(), 58));
+        System.out.printf("| %-20s | %-58s |\n", "Patient Name", truncate(patientName, 58));
+        System.out.printf("| %-20s | %-58s |\n", "Requested Blood Type", neededType != null ? neededType.getLabel() : "N/A");
+        System.out.printf("| %-20s | %-58s |\n", "Priority Classification", calculatedPriority);
+        System.out.printf("| %-20s | %-58s |\n", "Needed Target Time", request.getFormattedNeededDateTime());
+        System.out.printf("| %-20s | %-58s |\n", "Requisition Status", request.getStatus());
+        System.out.println("+----------------------+------------------------------------------------------------+");
+        System.out.println("✓ Requisition forward to Blood Bank Super Admin for clinical verification and stock allocation.");
+    }
+
+    private void handleHospitalStoreDonation(Scanner scanner, HospitalAdmin admin) {
+        System.out.println("\n--- Store Collected Blood Donation from " + admin.getHospitalName() + " ---");
+        PipelineHelper.executeFullProcessingPipeline(scanner, admin.getHospitalName(), centralInventory, inspectionService, logisticsService);
+    }
+
+    private void handleHospitalReturnBlood(Scanner scanner, HospitalAdmin admin) {
+        System.out.println("\n--- Return Unused / Excess Blood to Blood Bank (" + admin.getHospitalName() + " -> Blood Bank) ---");
+
+        String din = InputValidator.readValidDIN(scanner, "Enter DIN of the unit being returned (e.g. DIN-1001): ");
+        BloodType bloodType = PipelineHelper.promptBloodType(scanner);
+
+        Runnable printCompMenu = () -> {
+            System.out.println("Select component being returned:");
+            System.out.println("[1] Whole Blood");
+            System.out.println("[2] Packed Red Blood Cells (PRBC)");
+            System.out.println("[3] Fresh Frozen Plasma (FFP)");
+            System.out.println("[4] Platelets");
+        };
+        printCompMenu.run();
+        int compSel = InputValidator.readInteger(scanner, "Enter choice (1-4): ", 1, 4, printCompMenu);
+        BloodComponent comp = BloodComponent.fromChoice(String.valueOf(compSel));
+
+        Runnable printReasonMenu = () -> {
+            System.out.println("Select reason for return:");
+            System.out.println("[1] Patient discharged / surgery cancelled");
+            System.out.println("[2] Excess unit ordered");
+            System.out.println("[3] Approaching expiration date");
+            System.out.println("[4] Cold chain transfer failure");
+            System.out.println("[5] Other");
+        };
+        printReasonMenu.run();
+        int reasonChoice = InputValidator.readInteger(scanner, "Enter choice (1-5): ", 1, 5, printReasonMenu);
+        String reasonStr;
+        switch (reasonChoice) {
+            case 1: reasonStr = "Patient discharged / surgery cancelled"; break;
+            case 2: reasonStr = "Excess unit ordered"; break;
+            case 3: reasonStr = "Approaching expiration date"; break;
+            case 4: reasonStr = "Cold chain transfer failure"; break;
+            default:
+                System.out.print("Specify reason: ");
+                reasonStr = scanner.nextLine();
+                break;
+        }
+
+        // Rigorous Cold-Chain Checks
+        System.out.println("\n--- Cold-Chain Verification for Blood Return ---");
+        double temp = InputValidator.readDouble(scanner, "Enter custody temperature measured upon handoff in °C (-5.0 to 30.0): ", -5.0, 30.0);
+        boolean sealIntact = InputValidator.readBoolean(scanner, "Is the sterile unit seal completely intact and unopened? (y/n): ");
+
+        if (!sealIntact || temp < 1.0 || temp > 6.0) {
+            System.out.println("\n  [SAFETY VIOLATION] Blood unit " + din + " failed return safety criteria!");
+            if (!sealIntact) System.out.println("  - Sterile seal is compromised or opened.");
+            if (temp < 1.0 || temp > 6.0) System.out.printf("  - Storage temperature (%.1f°C) breached allowed cold-chain limits (1.0°C - 6.0°C).\n", temp);
+            System.out.println(">> Unit cannot be returned to active inventory. Routed to quarantine for biohazard disposal.");
+            return;
+        }
+
+        // Restock into Central Inventory
+        BloodUnit returnedUnit = new BloodUnit(din, bloodType, comp, "Returned from: " + admin.getHospitalName(), LocalDate.now(), comp.getStandardLifespanDays(), temp, false);
+        returnedUnit.setMlsPassed(true);
+        returnedUnit.setAdminApproved(true);
+        returnedUnit.setStatus(UnitStatus.STORED);
+        centralInventory.addUnit(returnedUnit);
+
+        logisticsService.performIntakeTransport(returnedUnit, admin.getHospitalName() + " (Excess Return: " + reasonStr + ")");
+
+        System.out.println("\n+-----------------------------------------------------------------------------------+");
+        System.out.println("|                            BLOOD RETURN SUCCESSFUL                                |");
+        System.out.println("+----------------------+------------------------------------------------------------+");
+        System.out.printf("| %-20s | %-58s |\n", "Returned Unit DIN", din);
+        System.out.printf("| %-20s | %-58s |\n", "Originating Hospital", truncate(admin.getHospitalName(), 58));
+        System.out.printf("| %-20s | %-58s |\n", "Blood Type & Comp", (bloodType != null ? bloodType.getLabel() : "N/A") + " - " + comp.getDisplayName());
+        System.out.printf("| %-20s | %-58s |\n", "Return Reason", truncate(reasonStr, 58));
+        System.out.printf("| %-20s | %-58s |\n", "Inventory Status", "RESTOCKED (Central Inventory Active Stock)");
+        System.out.println("+----------------------+------------------------------------------------------------+");
+        System.out.println("✓ Blood unit " + din + " successfully reintegrated into Central Blood Bank inventory.");
+    }
+
+    public void displayPatients() {
+        TableRenderer table = new TableRenderer("Account ID", "Name", "Blood Type", "Status")
+                .withTitle("REGISTERED PATIENT RECORDS");
+        table.setEmptyMessage("No registered patients found.");
+
+        List<Patient> patients = userService.getAllPatients();
+        for (Patient p : patients) {
+            table.addRow(p.getAccountId(), truncate(p.getName(), 24),
+                    (p.getBloodType() != null ? p.getBloodType().getLabel() : "N/A"),
+                    p.isActive() ? "Active" : "Archived");
+        }
+        System.out.println();
         table.render();
     }
 
-    /**
-     * Option 3: Connect to PipelineHelper to intake hospital-collected donor units.
-     */
-    private static void storeCollectedBlood(Scanner sc, HospitalAdmin admin) {
-        System.out.println("\n>>> STORE COLLECTED BLOOD (Hospital Donor Intake)");
-        String hospital = getAdminHospital(admin);
+    public void handleRegisterPatient(Scanner scanner) {
+        System.out.println("\n--- Register New Patient ---");
+        String name = InputValidator.readValidName(scanner, "Enter Patient Name: ");
+        BloodType bt = PipelineHelper.promptBloodType(scanner);
+        String pass = InputValidator.readValidPassword(scanner, "Set Patient Portal Password: ");
+        String generatedPatId = userService.generateUniqueAccountId(Roles.PATIENT);
 
-        BloodUnit unit = PipelineHelper.runClinicalIntakePipeline(sc, hospital, null);
-        if (unit != null) {
-            CentralInventory.getInstance().addUnit(unit);
-            System.out.println("[SUCCESS] Hospital-collected unit " + unit.getUnitId() + " successfully deposited into Central Inventory.");
-        }
-    }
-
-    /**
-     * Option 4: Quarantine temperature-compromised / spoiled units and send return alert to Central Bank.
-     */
-    private static void returnCompromisedUnits(Scanner sc, HospitalAdmin admin) {
-        System.out.println("\n>>> RETURN UNUSED / TEMPERATURE-COMPROMISED UNITS (Quarantine Protocol)");
-        String hospital = getAdminHospital(admin);
-
-        String unitId = InputValidator.readNonBlankString(sc, "  Enter Unit ID to quarantine/return (e.g. BU-1001): ", null).toUpperCase();
-
-        System.out.println("\n  Select Incident Reason:");
-        System.out.println("    [1] Cold-Chain Storage Temperature Breach (> 6°C detected)");
-        System.out.println("    [2] Packaging Integrity Compromised / Leaking Bag");
-        System.out.println("    [3] Unused Unit Returned Post-Procedure");
-        System.out.println("    [4] Serology / Clotting Contamination Detected");
-        int reasonChoice = InputValidator.readInt(sc, "  Enter incident reason (1-4): ", 1, 4, null);
-
-        String reasonText;
-        switch (reasonChoice) {
-            case 1:
-                reasonText = "Cold-Chain Temperature Breach (> 6°C)";
-                break;
-            case 2:
-                reasonText = "Packaging / Seal Integrity Compromised";
-                break;
-            case 3:
-                reasonText = "Unused Return (Post-Procedure)";
-                break;
-            case 4:
-                reasonText = "Suspected Contamination / Clotting";
-                break;
-            default:
-                reasonText = "General Spoilage / Return";
-                break;
-        }
-
-        CentralInventory inventory = CentralInventory.getInstance();
-        BloodUnit targetUnit = null;
-        for (BloodUnit u : inventory.getActiveUnits()) {
-            if (u != null && u.getUnitId() != null && u.getUnitId().equalsIgnoreCase(unitId)) {
-                targetUnit = u;
-                break;
-            }
-        }
-
-        if (targetUnit != null) {
-            targetUnit.setStatus(UnitStatus.QUARANTINED);
-            inventory.addUnit(targetUnit);
-        } else {
-            targetUnit = new BloodUnit(unitId, BloodType.O_POS, BloodComponent.WHOLE_BLOOD, LocalDate.now(), hospital);
-            targetUnit.setStatus(UnitStatus.QUARANTINED);
-            inventory.addUnit(targetUnit);
-        }
-
-        System.out.println("================================================================================");
-        System.out.println(">>> COLD-CHAIN QUARANTINE ALERT & RETURN NOTIFICATION");
-        System.out.println("================================================================================");
-        System.out.println("  Quarantined Unit ID   : " + unitId);
-        System.out.println("  Reporting Hospital    : " + hospital);
-        System.out.println("  Admin In-Charge       : " + (admin != null ? admin.getName() : "Dr. Nicole"));
-        System.out.println("  Incident Reason       : " + reasonText);
-        System.out.println("  Status Transition     : ACTIVE -> QUARANTINED");
-        System.out.println("  Action Dispatched     : Dispatched return advisory alert to Central Blood Bank.");
-        System.out.println("================================================================================");
-    }
-
-    /**
-     * Option 5: Register new bedside patient account bound to this hospital.
-     */
-    private static void registerBedsidePatient(Scanner sc, HospitalAdmin admin) {
-        System.out.println("\n>>> REGISTER NEW PATIENT ACCOUNT (Bedside Onboarding)");
-        String hospital = getAdminHospital(admin);
-
-        String fullName = InputValidator.readValidName(sc, "  Enter Patient Full Name: ");
-        BloodType bloodType = promptBloodType(sc);
-        String password = InputValidator.readValidPassword(sc, "  Set Patient Account Password: ");
-
-        UserService userService = UserService.getInstance();
-        String patientId = userService.generateId(Roles.PATIENT);
-
-        Patient patient = new Patient(patientId, fullName, hospital, password, bloodType);
+        Patient patient = new Patient(generatedPatId, name, pass, bt);
         userService.registerUser(patient);
 
-        System.out.println("------------------------------------------------------------");
-        System.out.println(">>> BEDSIDE PATIENT ONBOARDING RECEIPT");
-        System.out.println("------------------------------------------------------------");
-        System.out.println("Assigned Patient ID : " + patientId);
-        System.out.println("Patient Full Name   : " + fullName);
-        System.out.println("ABO/Rh Blood Type   : " + (bloodType != null ? bloodType.getCode() : "N/A"));
-        System.out.println("Hospital Ward       : " + hospital);
-        System.out.println("Status              : ACTIVE - Ready for Requisition Matching");
-        System.out.println("------------------------------------------------------------");
+        printAccountCreationReceipt(patient.getAccountId(), patient.getName(), "Patient (" + (bt != null ? bt.getLabel() : "N/A") + ")");
     }
 
-    /**
-     * Option 6: Render ASCII table of all patients registered under this hospital.
-     */
-    private static void viewAssignedPatients(HospitalAdmin admin) {
-        System.out.println("\n>>> VIEW ASSIGNED HOSPITAL PATIENTS");
-        String hospital = getAdminHospital(admin);
-
-        List<Patient> allPatients = UserService.getInstance().getAllPatients();
-        List<Patient> assigned = new ArrayList<>();
-
-        for (Patient p : allPatients) {
-            if (p != null) {
-                String aff = p.getHospitalAffiliation();
-                if (aff != null && (aff.equalsIgnoreCase(hospital) || hospital.equalsIgnoreCase("Hospital") || hospital.equalsIgnoreCase("N/A"))) {
-                    assigned.add(p);
-                }
-            }
-        }
-
-        TableRenderer table = new TableRenderer()
-                .withTitle("ASSIGNED PATIENTS - " + hospital.toUpperCase())
-                .addHeaders("Patient ID", "Full Name", "Blood Type", "Affiliated Hospital", "Status");
-
-        for (Patient p : assigned) {
-            String pid = p.getId() != null ? p.getId() : "N/A";
-            String name = p.getFullName() != null ? p.getFullName() : "N/A";
-            String bt = p.getBloodType() != null ? p.getBloodType().getCode() : "N/A";
-            String aff = p.getHospitalAffiliation() != null ? p.getHospitalAffiliation() : "N/A";
-            String status = p.getAccountStatus() != null ? p.getAccountStatus().name() : "ACTIVE";
-
-            table.addRow(pid, name, bt, aff, status);
-        }
-
-        table.render();
+    private void printAccountCreationReceipt(String accountId, String name, String roleTitle) {
+        System.out.println("\n+-----------------------------------------------------------------------------------+");
+        System.out.println("|                            ACCOUNT CREATED SUCCESSFULLY                           |");
+        System.out.println("+----------------------+------------------------------------------------------------+");
+        System.out.printf("| %-20s | %-58s |\n", "Generated Account ID", accountId);
+        System.out.printf("| %-20s | %-58s |\n", "Account Holder", name);
+        System.out.printf("| %-20s | %-58s |\n", "Role Classification", roleTitle);
+        System.out.println("+----------------------+------------------------------------------------------------+");
+        System.out.printf("| %-81s |\n", ">> IMPORTANT: Remember your Account ID (" + accountId + ") to sign in later!");
+        System.out.println("+-----------------------------------------------------------------------------------+");
     }
 
-    /**
-     * Helper to resolve the active hospital affiliation for the admin.
-     */
-    private static String getAdminHospital(HospitalAdmin admin) {
-        if (admin != null && admin.getHospitalAffiliation() != null
-                && !admin.getHospitalAffiliation().trim().isEmpty()
-                && !admin.getHospitalAffiliation().equalsIgnoreCase("N/A")) {
-            return admin.getHospitalAffiliation().trim();
-        }
-        return "St. Jude Medical Center";
-    }
-
-    /**
-     * Prompts for and validates an ABO/Rh Blood Type.
-     */
-    private static BloodType promptBloodType(Scanner sc) {
-        BloodType bloodType = null;
-        while (bloodType == null) {
-            System.out.print("  Enter ABO/Rh Blood Type (e.g. O+, A-, B+, AB-): ");
-            String input = sc.nextLine();
-            if (input == null) continue;
-            input = input.trim();
-
-            if (input.isEmpty()) {
-                System.out.println("  [Validation Error] Blood type cannot be empty.");
-                continue;
-            }
-
-            try {
-                bloodType = BloodType.fromString(input);
-            } catch (IllegalArgumentException e) {
-                System.out.println("  [Validation Error] " + e.getMessage() + ". Valid values: O+, O-, A+, A-, B+, B-, AB+, AB-");
-            }
-        }
-        return bloodType;
+    private static String truncate(String text, int maxLen) {
+        if (text == null) return "";
+        if (text.length() <= maxLen) return text;
+        return text.substring(0, maxLen - 3) + "...";
     }
 }

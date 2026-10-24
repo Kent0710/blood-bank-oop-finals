@@ -1,135 +1,101 @@
-import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Scanner;
 
-/** Read-only self-service dashboard for authenticated patients. */
+/**
+ * Controller managing the Patient Portal and read-only transfusion tracking.
+ */
 public class PatientController {
-    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+    private final LogisticsService logisticsService;
 
-    public PatientController() { }
-
-    /** Compatibility entry point used by AuthController's role router. */
-    public static void handlePatientMenu(Scanner sc, Patient patient) {
-        showDashboard(sc, patient);
+    public PatientController() {
+        this.logisticsService = LogisticsService.getInstance();
     }
 
-    public static void showDashboard(Scanner sc, Patient patient) {
-        if (sc == null) sc = new Scanner(System.in);
-        if (patient == null || patient.getId() == null || patient.getId().trim().isEmpty()) {
-            System.out.println("[Access Denied] A valid patient account is required.");
+    public static void showDashboard(Scanner scanner, Patient patient) {
+        new PatientController().handlePatientMenu(scanner, patient);
+    }
+
+    public void handlePatientMenu(Scanner scanner, Patient patient) {
+        if (scanner == null) scanner = new Scanner(System.in);
+        String name = (patient != null && patient.getName() != null) ? patient.getName() : "Patient";
+        String id = (patient != null && patient.getAccountId() != null) ? patient.getAccountId() : "PA-4001";
+
+        Runnable printPatientMenu = () -> {
+            System.out.println("+-----------------------------------------------------------------------------------+");
+            System.out.printf("| %-81s |\n", "PATIENT PORTAL: " + truncate(name + " [ID: " + id + "]", 63));
+            System.out.println("+-----------------------------------------------------------------------------------+");
+            System.out.println("| [1] View Patient Blood Profile & Compatibility Details (Read)                     |");
+            System.out.println("| [2] Track Blood Request Status & Status Chain (Read)                              |");
+            System.out.println("| [3] Log out                                                                       |");
+            System.out.println("+-----------------------------------------------------------------------------------+");
+        };
+
+        boolean inPatientMenu = true;
+        while (inPatientMenu) {
+            try {
+                System.out.println();
+                printPatientMenu.run();
+
+                int choice = InputValidator.readInteger(scanner, "Enter choice (1-3): ", 1, 3, printPatientMenu);
+
+                switch (choice) {
+                    case 1:
+                        patient.displayBloodProfile();
+                        break;
+                    case 2:
+                        handlePatientTrackRequests(patient);
+                        break;
+                    case 3:
+                        System.out.println("Logging out from Patient Portal...");
+                        inPatientMenu = false;
+                        break;
+                }
+            } catch (NoSuchElementException e) {
+                break;
+            } catch (Exception e) {
+                System.out.println("\n  [Patient Notice] An unexpected error occurred: " + e.getMessage());
+                System.out.println("  Returning to patient portal menu...");
+            }
+        }
+    }
+
+    public void handlePatientTrackRequests(Patient patient) {
+        System.out.println("\n+-----------------------------------------------------------------------------------+");
+        System.out.println("|                                BLOOD REQUEST TRACKER                              |");
+        System.out.println("+-----------------------------------------------------------------------------------+");
+        System.out.printf("| Patient: %-25s | ID: %-42s |\n", patient.getName(), patient.getAccountId());
+        System.out.println("+-----------------------------------------------------------------------------------+");
+
+        List<BloodRequest> patientRequests = logisticsService.getRequestsForPatient(patient.getName());
+
+        if (patientRequests.isEmpty()) {
+            System.out.println("| No blood requests currently filed under your clinical record.                     |");
+            System.out.println("| Note: Requests are submitted on your behalf by your Hospital Admin.               |");
+            System.out.println("+-----------------------------------------------------------------------------------+");
             return;
         }
 
-        boolean running = true;
-        while (running) {
-            try {
-                printMenu(patient);
-                int choice = InputValidator.readInt(sc, "Enter choice (1-4): ", 1, 4, () -> printMenu(patient));
-                switch (choice) {
-                    case 1: viewMyRequisitions(patient); break;
-                    case 2: viewTransfusionHistory(patient); break;
-                    case 3: viewProfile(patient); break;
-                    case 4:
-                        System.out.println("[LOGOUT] Patient session ended. Returning to main menu...");
-                        running = false;
-                        break;
-                    default: break;
-                }
-            } catch (NoSuchElementException e) {
-                running = false;
-            } catch (Exception e) {
-                System.out.println("[Patient Portal Notice] Unable to display that information: " + safeMessage(e));
+        for (BloodRequest req : patientRequests) {
+            System.out.printf("| Request ID      : %-63s |\n", req.getRequestId());
+            System.out.printf("| Hospital        : %-63s |\n", req.getHospitalName());
+            System.out.printf("| Requested Blood : %-63s |\n", (req.getRequestedBloodType() != null ? req.getRequestedBloodType().getLabel() : "N/A"));
+            System.out.printf("| Priority        : %-63s |\n", req.getRequestType());
+            System.out.printf("| Needed Target   : %-63s |\n", req.getFormattedNeededDateTime());
+            System.out.printf("| Current Status  : %-63s |\n", req.getStatus());
+            System.out.printf("| Status Chain    : %-63s |\n", req.getStatusChainDisplay());
+            if (req.getAllocatedUnit() != null) {
+                System.out.printf("| Allocated Unit  : DIN %-10s (%-46s) |\n",
+                        req.getAllocatedUnit().getDin(),
+                        (req.getAllocatedUnit().getComponent() != null ? req.getAllocatedUnit().getComponent().getDisplayName() : "N/A"));
             }
+            System.out.println("+-----------------------------------------------------------------------------------+");
         }
     }
 
-    private static void printMenu(Patient patient) {
-        String name = safe(patient.getFullName());
-        String bloodType = patient.getBloodType() == null ? "N/A" : patient.getBloodType().getCode();
-        String title = "PATIENT SELF-SERVICE PORTAL: " + name + " [Blood Type: " + bloodType + "]";
-        System.out.println("+-----------------------------------------------------------------------------------+");
-        System.out.printf("| %-81s |%n", truncate(title, 81));
-        System.out.println("+-----------------------------------------------------------------------------------+");
-        System.out.println("| [1] View My Active Blood Requests (Live Requisition Status)                       |");
-        System.out.println("| [2] View Transfusion Medical History                                              |");
-        System.out.println("| [3] View My Profile                                                               |");
-        System.out.println("| [4] Log out                                                                       |");
-        System.out.println("+-----------------------------------------------------------------------------------+");
+    private static String truncate(String text, int maxLen) {
+        if (text == null) return "";
+        if (text.length() <= maxLen) return text;
+        return text.substring(0, maxLen - 3) + "...";
     }
-
-    private static void viewMyRequisitions(Patient patient) {
-        List<BloodRequest> requests = new ArrayList<>();
-        for (BloodRequest r : getPatientRequests(patient)) {
-            if (r.getStatus() == RequisitionStatus.PENDING || r.getStatus() == RequisitionStatus.APPROVED
-                    || r.getStatus() == RequisitionStatus.IN_TRANSIT) requests.add(r);
-        }
-        TableRenderer table = new TableRenderer().withTitle("MY BLOOD REQUESTS - LIVE STATUS")
-                .addHeaders("Req ID", "Hospital", "Blood Type", "Priority", "Target Delivery", "Status");
-        for (BloodRequest r : requests) {
-            table.addRow(safe(r.getRequestId()), safe(r.getHospitalName()),
-                    r.getBloodType() == null ? "N/A" : r.getBloodType().getCode(),
-                    r.getPriority() == null ? "N/A" : r.getPriority().name(),
-                    r.getTargetTime() == null ? "N/A" : r.getTargetTime().format(TIME_FORMAT),
-                    r.getStatus() == null ? "UNKNOWN" : r.getStatus().name());
-        }
-        if (requests.isEmpty()) System.out.println("No blood requests are currently associated with your account.");
-        table.render();
-    }
-
-    private static void viewTransfusionHistory(Patient patient) {
-        List<BloodRequest> completed = new ArrayList<>();
-        for (BloodRequest r : getPatientRequests(patient)) {
-            if (r.getStatus() == RequisitionStatus.DELIVERED || r.getStatus() == RequisitionStatus.COMPLETED) completed.add(r);
-        }
-        TableRenderer table = new TableRenderer().withTitle("TRANSFUSION MEDICAL HISTORY")
-                .addHeaders("Req ID", "Hospital", "Blood Type", "Priority", "Delivery Date", "Status");
-        for (BloodRequest r : completed) {
-            table.addRow(safe(r.getRequestId()), safe(r.getHospitalName()),
-                    r.getBloodType() == null ? "N/A" : r.getBloodType().getCode(),
-                    r.getPriority() == null ? "N/A" : r.getPriority().name(),
-                    r.getTargetTime() == null ? "N/A" : r.getTargetTime().format(TIME_FORMAT),
-                    r.getStatus().name());
-        }
-        if (completed.isEmpty()) System.out.println("No completed transfusion deliveries are recorded for your account.");
-        table.render();
-        System.out.println("History is derived from delivered or completed requisitions recorded by the system.");
-    }
-
-    private static void viewProfile(Patient patient) {
-        System.out.println("\n+-----------------------------------------------------------------------------------+");
-        System.out.println("| CLINICAL PROFILE                                                                 |");
-        System.out.println("+----------------------+------------------------------------------------------------+");
-        profileRow("Patient ID", safe(patient.getId()));
-        profileRow("Full Name", safe(patient.getFullName()));
-        profileRow("Blood Type", patient.getBloodType() == null ? "N/A" : patient.getBloodType().getCode());
-        profileRow("Hospital", safe(patient.getHospitalAffiliation()));
-        profileRow("Account Status", patient.isArchived() ? "ARCHIVED" : "ACTIVE");
-        System.out.println("+----------------------+------------------------------------------------------------+");
-    }
-
-    private static List<BloodRequest> getPatientRequests(Patient patient) {
-        List<BloodRequest> matches = InspectionService.getInstance().getRequisitionsByPatient(patient.getFullName());
-        String affiliation = patient.getHospitalAffiliation();
-        if (affiliation == null || affiliation.trim().isEmpty() || affiliation.equalsIgnoreCase("Walk-in")
-                || affiliation.equalsIgnoreCase("N/A")) return matches;
-
-        // Hospital-affiliated patient accounts only see same-name requests for their hospital.
-        List<BloodRequest> scoped = new ArrayList<>();
-        for (BloodRequest request : matches) {
-            if (request.getHospitalName() != null && request.getHospitalName().equalsIgnoreCase(affiliation.trim())) {
-                scoped.add(request);
-            }
-        }
-        return scoped;
-    }
-
-    private static void profileRow(String label, String value) {
-        System.out.printf("| %-20s | %-58s |%n", label, truncate(value, 58));
-    }
-
-    private static String safe(String s) { return s == null || s.trim().isEmpty() ? "N/A" : s.trim(); }
-    private static String truncate(String s, int max) { return s.length() <= max ? s : s.substring(0, Math.max(0, max - 3)) + "..."; }
-    private static String safeMessage(Exception e) { return e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage(); }
 }

@@ -28,8 +28,10 @@ public class FifoAllocationStrategy implements AllocationStrategy {
 
         List<BloodUnit> matchingUnits = new ArrayList<>();
         for (BloodUnit unit : availableUnits) {
-            if (unit != null && unit.getStatus() == UnitStatus.ACTIVE && unit.getBloodType() == requestedType) {
-                matchingUnits.add(unit);
+            if (unit != null && (unit.getStatus() == UnitStatus.ACTIVE || unit.getStatus() == UnitStatus.STORED)) {
+                if (unit.getBloodType() == requestedType || BloodType.isCompatible(unit.getBloodType(), requestedType)) {
+                    matchingUnits.add(unit);
+                }
             }
         }
 
@@ -58,37 +60,41 @@ public class FifoAllocationStrategy implements AllocationStrategy {
             }
         });
 
-        BloodUnit selectedUnit = matchingUnits.get(0);
+        BloodUnit selected = matchingUnits.get(0);
 
-        printExecutionBanner(requestedType.getCode(), matchingUnits.size(), selectedUnit, requestId);
-
-        return selectedUnit;
-    }
-
-    /**
-     * Overloaded allocation method accepting a BloodRequest.
-     */
-    public BloodUnit allocate(List<BloodUnit> availableUnits, BloodRequest request) throws InsufficientStockException {
-        if (request == null) {
-            throw new InsufficientStockException("Cannot allocate: BloodRequest is null.");
-        }
-        return allocate(availableUnits, request.getBloodType(), request.getRequestId());
-    }
-
-    private void printExecutionBanner(String typeCode, int matchCount, BloodUnit selected, String requestId) {
         System.out.println("================================================================================");
         System.out.println(">>> ALLOCATION STRATEGY ENGINE EXECUTION");
         System.out.println("================================================================================");
         System.out.println("Active Strategy : " + getStrategyName());
-        System.out.println("Requested Type  : " + typeCode);
-        System.out.println("Matching Units  : " + matchCount + (matchCount == 1 ? " unit found" : " units found"));
+        System.out.println("Requested Type  : " + requestedType.getCode());
+        System.out.println("Matching Units  : " + matchingUnits.size() + (matchingUnits.size() == 1 ? " unit found" : " units found"));
         System.out.println("Selected Unit   : " + selected.getUnitId() + " (Donation: " + selected.getDonationDate() + " -> Oldest First)");
         if (requestId != null && !requestId.trim().isEmpty()) {
-            System.out.println("Status          : Allocated -> Assigned to " + requestId.trim());
+            System.out.println("Status          : Allocated -> Assigned to " + requestId);
         } else {
-            System.out.println("Status          : Allocated");
+            System.out.println("Status          : Allocated -> Reserved for requisition");
         }
         System.out.println("================================================================================");
+
+        return selected;
+    }
+
+    @Override
+    public BloodUnit selectUnit(List<BloodUnit> stock, BloodType requestedType, LocalDate targetDate)
+            throws InsufficientStockException {
+        if (stock == null || requestedType == null) {
+            throw new InsufficientStockException("Cannot allocate: stock or requested type is null.");
+        }
+        LocalDate checkDate = (targetDate != null) ? targetDate : LocalDate.now();
+        return stock.stream()
+                .filter(u -> (u.getStatus() == UnitStatus.STORED || u.getStatus() == UnitStatus.ACTIVE) &&
+                        !u.isExpiredOn(checkDate) &&
+                        !u.isContaminated() &&
+                        BloodType.isCompatible(u.getBloodType(), requestedType))
+                .min(Comparator.comparing(BloodUnit::getDonationDate))
+                .orElseThrow(() -> new InsufficientStockException(
+                        "FIFO Allocation Failed: No compatible, non-expired unit found for blood type '" +
+                                requestedType.getLabel() + "' valid on date " + checkDate));
     }
 
     @Override

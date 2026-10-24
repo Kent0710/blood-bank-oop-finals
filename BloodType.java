@@ -1,3 +1,6 @@
+import java.util.ArrayList;
+import java.util.List;
+
 public enum BloodType {
     O_POS("O+"),
     O_NEG("O-"),
@@ -56,5 +59,25 @@ public enum BloodType {
             default:
                 return false;
         }
+    }
+
+    public List<String> getCompatibleDonors() {
+        List<String> list = new ArrayList<>();
+        for (BloodType donor : BloodType.values()) {
+            if (isCompatible(donor, this)) {
+                list.add(donor.getLabel());
+            }
+        }
+        return list;
+    }
+
+    public List<String> getCompatibleRecipients() {
+        List<String> list = new ArrayList<>();
+        for (BloodType recipient : BloodType.values()) {
+            if (isCompatible(this, recipient)) {
+                list.add(recipient.getLabel());
+            }
+        }
+        return list;
     }
 }

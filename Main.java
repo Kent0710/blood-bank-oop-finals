@@ -10,9 +10,9 @@ public class Main {
     public static void main(String[] args) {
         Scanner scanner = new Scanner(System.in);
 
-        System.out.println("================================================================================");
-        System.out.println("       CENTRAL BLOOD BANK MANAGEMENT & LOGISTICS DISTRIBUTION SYSTEM        ");
-        System.out.println("================================================================================");
+        System.out.println("===================================================================================");
+        System.out.println("            Blood Bank Management System (Java Terminal Application)               ");
+        System.out.println("===================================================================================");
 
         Runnable printMainMenu = () -> {
             System.out.println("+----------------------- MAIN SYSTEM MENU -----------------------+");
@@ -37,7 +37,7 @@ public class Main {
                         AuthController.handleCreateAccount(scanner);
                         break;
                     case 3:
-                        System.out.println("\nThank you for using the Blood Bank System. System terminated safely.");
+                        System.out.println("\nThank you for using Blood Bank Management System. Goodbye!");
                         isRunning = false;
                         break;
                     default:
@@ -55,7 +55,7 @@ public class Main {
         scanner.close();
     }
 
-    //Print User Profile Badge
+    // Print User Profile Badge
     private static void printUserProfile(User user) {
         String border = "+" + "-".repeat(15) + "+" + "-".repeat(67) + "+";
 
@@ -75,5 +75,4 @@ public class Main {
     private static void printRow(String label, String value) {
         System.out.printf("| %-13s | %-65s |%n", label, value);
     }
-
 }

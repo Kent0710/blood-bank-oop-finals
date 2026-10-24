@@ -9,6 +9,6 @@ public class LogisticsManager extends User {
 
     @Override
     public String getRoleDescription() {
-        return "Logistics Dispatcher";
+        return "Logistics: Manages physical blood transport, processes urgent (priority) and scheduled dispatches, handles intake transport.";
     }
 }

@@ -7,8 +7,8 @@ import java.util.List;
 /**
  * Concrete Allocation Strategy implementing FEFO (First Expired, First Out).
  * Filters active blood units matching the requested blood type and sorts them
- * by expirationDate in ascending order (earliest expiring first) to minimize
- * clinical inventory spoilage.
+ * by expirationDate in ascending order (nearest expiration first) to minimize
+ * blood inventory spoilage and wastage.
  */
 public class FefoAllocationStrategy implements AllocationStrategy {
 
@@ -28,8 +28,10 @@ public class FefoAllocationStrategy implements AllocationStrategy {
 
         List<BloodUnit> matchingUnits = new ArrayList<>();
         for (BloodUnit unit : availableUnits) {
-            if (unit != null && unit.getStatus() == UnitStatus.ACTIVE && unit.getBloodType() == requestedType) {
-                matchingUnits.add(unit);
+            if (unit != null && (unit.getStatus() == UnitStatus.ACTIVE || unit.getStatus() == UnitStatus.STORED)) {
+                if (unit.getBloodType() == requestedType || BloodType.isCompatible(unit.getBloodType(), requestedType)) {
+                    matchingUnits.add(unit);
+                }
             }
         }
 
@@ -37,7 +39,7 @@ public class FefoAllocationStrategy implements AllocationStrategy {
             throw new InsufficientStockException("Insufficient stock: No active units found for blood type " + requestedType.getCode() + ".");
         }
 
-        // Filters active units by requestedType, sorts by expirationDate ASC (earliest expiring first)
+        // Filters active units by requestedType, sorts by expirationDate ASC (nearest expiration first)
         Collections.sort(matchingUnits, new Comparator<BloodUnit>() {
             @Override
             public int compare(BloodUnit u1, BloodUnit u2) {
@@ -58,37 +60,41 @@ public class FefoAllocationStrategy implements AllocationStrategy {
             }
         });
 
-        BloodUnit selectedUnit = matchingUnits.get(0);
+        BloodUnit selected = matchingUnits.get(0);
 
-        printExecutionBanner(requestedType.getCode(), matchingUnits.size(), selectedUnit, requestId);
-
-        return selectedUnit;
-    }
-
-    /**
-     * Overloaded allocation method accepting a BloodRequest.
-     */
-    public BloodUnit allocate(List<BloodUnit> availableUnits, BloodRequest request) throws InsufficientStockException {
-        if (request == null) {
-            throw new InsufficientStockException("Cannot allocate: BloodRequest is null.");
-        }
-        return allocate(availableUnits, request.getBloodType(), request.getRequestId());
-    }
-
-    private void printExecutionBanner(String typeCode, int matchCount, BloodUnit selected, String requestId) {
         System.out.println("================================================================================");
         System.out.println(">>> ALLOCATION STRATEGY ENGINE EXECUTION");
         System.out.println("================================================================================");
         System.out.println("Active Strategy : " + getStrategyName());
-        System.out.println("Requested Type  : " + typeCode);
-        System.out.println("Matching Units  : " + matchCount + (matchCount == 1 ? " unit found" : " units found"));
-        System.out.println("Selected Unit   : " + selected.getUnitId() + " (Expiry: " + selected.getExpirationDate() + " -> Earliest Expiring)");
+        System.out.println("Requested Type  : " + requestedType.getCode());
+        System.out.println("Matching Units  : " + matchingUnits.size() + (matchingUnits.size() == 1 ? " unit found" : " units found"));
+        System.out.println("Selected Unit   : " + selected.getUnitId() + " (Expiration: " + selected.getExpirationDate() + " -> Nearest Expiration First)");
         if (requestId != null && !requestId.trim().isEmpty()) {
-            System.out.println("Status          : Allocated -> Assigned to " + requestId.trim());
+            System.out.println("Status          : Allocated -> Assigned to " + requestId);
         } else {
-            System.out.println("Status          : Allocated");
+            System.out.println("Status          : Allocated -> Reserved for requisition");
         }
         System.out.println("================================================================================");
+
+        return selected;
+    }
+
+    @Override
+    public BloodUnit selectUnit(List<BloodUnit> stock, BloodType requestedType, LocalDate targetDate)
+            throws InsufficientStockException {
+        if (stock == null || requestedType == null) {
+            throw new InsufficientStockException("Cannot allocate: stock or requested type is null.");
+        }
+        LocalDate checkDate = (targetDate != null) ? targetDate : LocalDate.now();
+        return stock.stream()
+                .filter(u -> (u.getStatus() == UnitStatus.STORED || u.getStatus() == UnitStatus.ACTIVE) &&
+                        !u.isExpiredOn(checkDate) &&
+                        !u.isContaminated() &&
+                        BloodType.isCompatible(u.getBloodType(), requestedType))
+                .min(Comparator.comparing(BloodUnit::getExpirationDate))
+                .orElseThrow(() -> new InsufficientStockException(
+                        "FEFO Allocation Failed: No compatible, non-expired unit found for blood type '" +
+                                requestedType.getLabel() + "' valid on date " + checkDate));
     }
 
     @Override
