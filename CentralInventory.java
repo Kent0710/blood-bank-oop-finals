@@ -100,13 +100,12 @@ public class CentralInventory {
     }
 
     /**
-     * Checks availability of compatible non-expired blood.
+     * Checks availability of compatible non-expired blood currently in active stock.
      */
     public synchronized boolean isBloodAvailable(BloodType requestedType, LocalDate targetDate) {
-        LocalDate checkDate = targetDate != null ? targetDate : LocalDate.now();
         return activeUnits.stream().anyMatch(unit ->
                 (unit.getStatus() == UnitStatus.STORED || unit.getStatus() == UnitStatus.ACTIVE) &&
-                !unit.isExpiredOn(checkDate) &&
+                !unit.isCurrentlyExpired() &&
                 !unit.isContaminated() &&
                 BloodType.isCompatible(unit.getBloodType(), requestedType)
         );

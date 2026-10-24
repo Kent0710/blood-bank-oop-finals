@@ -85,16 +85,15 @@ public class FifoAllocationStrategy implements AllocationStrategy {
         if (stock == null || requestedType == null) {
             throw new InsufficientStockException("Cannot allocate: stock or requested type is null.");
         }
-        LocalDate checkDate = (targetDate != null) ? targetDate : LocalDate.now();
         return stock.stream()
                 .filter(u -> (u.getStatus() == UnitStatus.STORED || u.getStatus() == UnitStatus.ACTIVE) &&
-                        !u.isExpiredOn(checkDate) &&
+                        !u.isCurrentlyExpired() &&
                         !u.isContaminated() &&
                         BloodType.isCompatible(u.getBloodType(), requestedType))
                 .min(Comparator.comparing(BloodUnit::getDonationDate))
                 .orElseThrow(() -> new InsufficientStockException(
                         "FIFO Allocation Failed: No compatible, non-expired unit found for blood type '" +
-                                requestedType.getLabel() + "' valid on date " + checkDate));
+                                requestedType.getLabel() + "' in active stock"));
     }
 
     @Override

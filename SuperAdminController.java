@@ -365,8 +365,7 @@ public class SuperAdminController {
         if (action == 1) {
             if (!isAvailable) {
                 System.out.println(">> WARNING: Central inventory has insufficient available units for " +
-                        (targetReq.getRequestedBloodType() != null ? targetReq.getRequestedBloodType().getLabel() : "") +
-                        " on " + targetReq.getNeededByDate() + ".");
+                        (targetReq.getRequestedBloodType() != null ? targetReq.getRequestedBloodType().getLabel() : "") + " in active stock.");
                 System.out.println("   Cannot approve without available stock. Please restock or reject.");
                 return;
             }
