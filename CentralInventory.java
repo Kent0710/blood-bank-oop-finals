@@ -100,6 +100,55 @@ public class CentralInventory {
     }
 
     /**
+     * Seeds initial blood units across all ABO/Rh blood types and components.
+     * Ensures healthy initial stock levels above the safety threshold.
+     */
+    public synchronized void seedDefaultInventory() {
+        if (!activeUnits.isEmpty()) {
+            return;
+        }
+
+        LocalDate today = LocalDate.now();
+        BloodType[] allTypes = {
+            BloodType.O_NEG, BloodType.O_POS,
+            BloodType.A_NEG, BloodType.A_POS,
+            BloodType.B_NEG, BloodType.B_POS,
+            BloodType.AB_NEG, BloodType.AB_POS
+        };
+
+        BloodComponent[] components = {
+            BloodComponent.WHOLE_BLOOD,
+            BloodComponent.PACKED_RED_CELLS,
+            BloodComponent.PLASMA,
+            BloodComponent.PLATELETS
+        };
+
+        int idCounter = 1001;
+        for (BloodType type : allTypes) {
+            for (BloodComponent comp : components) {
+                // Seed 2 units of each component per blood type (8 units total per blood type)
+                for (int i = 0; i < 2; i++) {
+                    String din = "DIN-" + (idCounter++);
+                    int daysOld = 2 + (i * 2);
+                    LocalDate collectionDate = today.minusDays(daysOld);
+                    BloodUnit unit = new BloodUnit(
+                            din,
+                            type,
+                            comp,
+                            collectionDate,
+                            "Philippine Red Cross"
+                    );
+                    unit.setStatus(UnitStatus.ACTIVE);
+                    unit.setAdminApproved(true);
+                    unit.setMlsPassed(true);
+                    unit.setScientistLogged(true);
+                    activeUnits.add(unit);
+                }
+            }
+        }
+    }
+
+    /**
      * Checks availability of compatible non-expired blood currently in active stock.
      */
     public synchronized boolean isBloodAvailable(BloodType requestedType, LocalDate targetDate) {

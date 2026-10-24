@@ -10,6 +10,9 @@ public class Main {
     public static void main(String[] args) {
         Scanner scanner = new Scanner(System.in);
 
+        // Pre-seed Central Inventory with active stock across all blood types
+        CentralInventory.getInstance().seedDefaultInventory();
+
         System.out.println("===================================================================================");
         System.out.println("            Blood Bank Management System (Java Terminal Application)               ");
         System.out.println("===================================================================================");
